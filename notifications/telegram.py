@@ -14,18 +14,20 @@ ALTERNATIVE_CHAT_ID_FIELD = "CONTACT_TELEGRAM_CHAT_ID" # for custom attributes
 BOT_TOKEN_FIELD = "PARAMETER_TELEGRAM_BOT_TOKEN"
 
 # TODO: stop linking hostname/service descr?
-HOST_TEMPLATE = """*Check_MK: $HOSTNAME$ - $EVENT_TXT$*
-```
+HOST_TEMPLATE = """<b>Check_MK: <a href="%s">$HOSTNAME$ - $EVENT_TXT$</a></b>
+<code>
 Host:     $HOSTNAME$
 Alias:    $HOSTALIAS$
 Address:  $HOSTADDRESS$
 Event:    $EVENT_TXT$
 Output:   $HOSTOUTPUT$
 
-$LONGHOSTOUTPUT$```"""
+$LONGHOSTOUTPUT$</code>"""
 
-SERVICE_TEMPLATE = """*Check_MK: $HOSTNAME$/$SERVICEDESC$ $EVENT_TXT$*
-```
+# TODO: add parameter to define URL prefix like for mail
+
+SERVICE_TEMPLATE = """<b>Check_MK: <a href="%s">$HOSTNAME$/$SERVICEDESC$ $EVENT_TXT$</a></b>
+<code>
 Host:     $HOSTNAME$
 Alias:    $HOSTALIAS$
 Address:  $HOSTADDRESS$
@@ -33,7 +35,7 @@ Service:  $SERVICEDESC$
 Event:    $EVENT_TXT$
 Output:   $SERVICEOUTPUT$
 
-$LONGSERVICEOUTPUT$```"""
+$LONGSERVICEOUTPUT$</code>"""
 
 def telegram_bot_token(context):
     if BOT_TOKEN_FIELD in context:
@@ -81,12 +83,12 @@ def telegram_send_message(context, text):
     telegram_command("sendMessage", context, **{
             "text": text,
             "disable_web_page_preview": True,
-            "parse_mode": "Markdown"
+            "parse_mode": "html"
         })
 
 def telegram_send_photo(context, caption, photo_data):
     telegram_command("sendPhoto", context, files={"photo": photo_data}, **{
-        "parse_mode": "Markdown",
+        "parse_mode": "html",
         "caption": caption
     })
 
@@ -114,9 +116,9 @@ def main(host_template, service_template):
     context = utils.collect_context()
 
     if context["WHAT"] == "SERVICE":
-        text = service_template
+        text = service_template % utils.service_url_from_context(context)
     else:
-        text = host_template
+        text = host_template % utils.host_url_from_context(context)
     text = utils.substitute_context(text, context)
 
     try:
@@ -141,7 +143,7 @@ def main(host_template, service_template):
             # Add notification text as description
             telegram_media[-1].update({
                 "caption": text,
-                "parse_mode": "Markdown"
+                "parse_mode": "html"
             })
 
             telegram_send_mediagroup(context, media_data, telegram_media)

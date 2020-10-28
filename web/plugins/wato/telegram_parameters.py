@@ -35,7 +35,7 @@ class NotificationParameterTelegram(NotificationParameter):
                     help=
                     _("The API token for the telegram bot used to send notifications. It follows the format <tt><int>:<str></tt>."
                     ),
-                    allow_empty=False,
+                    #allow_empty=False,
                     size=60
                 )
             ),
@@ -46,7 +46,7 @@ class NotificationParameterTelegram(NotificationParameter):
                     To get you Telegram chat ID, follow the instructions on https://docs.influxdata.com/kapacitor/v1.5/event_handlers/telegram/#get-your-telegram-chat-id
                     When the chat ID is not set here, the custom attribute <tt>TELEGRAM_CHAT_ID</tt> will be checked instead.
                     """),
-                    allow_empty=False,
+                    #allow_empty=False,
                     size=15
                 )
             ),

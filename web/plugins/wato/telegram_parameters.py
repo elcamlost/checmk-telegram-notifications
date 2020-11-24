@@ -9,6 +9,7 @@ from cmk.gui.valuespec import (
     Dictionary,
     TextAscii,
     Transform,
+    Checkbox,
     CascadingDropdown
 )
 from cmk.gui.plugins.wato import (
@@ -20,6 +21,7 @@ from cmk.gui.plugins.wato.notifications import (
     transform_forth_html_mail_url_prefix
 )
 
+# TODO: parameters show as "???" in WATO
 @notification_parameter_registry.register
 class NotificationParameterTelegram(NotificationParameter):
     @property
@@ -63,4 +65,27 @@ class NotificationParameterTelegram(NotificationParameter):
                     default_value="",
                 )
             ),
+            (
+                "graphs",
+                # Dictionary(
+                #     title=_("Configure when to show graphs"),
+                #     help=_("This setting allows to configure when to send or not to send graphs to a notification. "
+                #     "Default is to always send graphs."),
+                #     elements=[
+                #         (0, Checkbox(title=_("OK"), default_value=True)),
+                #         (1, Checkbox(title=_("WARN"), default_value=True)),
+                #         (2, Checkbox(title=_("CRIT"), default_value=True)),
+                #         (3, Checkbox(title=_("UNKNOWN"), default_value=True)),
+                #     ],
+                #     optional_keys=[]
+                # )
+                ListOf(
+                    MonitoringState(),
+                    title=_("Configure when to show graphs"),
+                    help=_("This setting allows to configure when to send or not to send graphs to a notification. "
+                    "Default is to always send graphs."),
+                    default_value=[0,1,2,3]
+                    # TODO: disable reordering
+                )
+            )
         ])

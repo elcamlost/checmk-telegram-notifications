@@ -1,0 +1,24 @@
+2020-11-27 18:41:36,870 [20] [cmk.base.notify] ----------------------------------------------------------------------
+2020-11-27 18:41:36,871 [20] [cmk.base.notify] Got raw notification (procyon.mstsc.ch;Docker node info) context with 73 variables
+2020-11-27 18:41:36,871 [15] [cmk.base.notify] Global rule 'Telegram'...
+2020-11-27 18:41:36,872 [15] [cmk.base.notify]  -> does not match: This rule is disabled
+2020-11-27 18:41:36,872 [20] [cmk.base.notify] Global rule 'Telegram Test'...
+2020-11-27 18:41:36,872 [20] [cmk.base.notify]  -> matches!
+2020-11-27 18:41:36,872 [20] [cmk.base.notify] Warning: cannot get information about contact mailto:justdoit@test.com: ignoring restrictions
+2020-11-27 18:41:36,872 [20] [cmk.base.notify]    - adding notification of mailto:justdoit@test.com via telegram.py
+2020-11-27 18:41:36,874 [15] [cmk.base.notify] Global rule 'Sol-Default'...
+2020-11-27 18:41:36,874 [15] [cmk.base.notify]  -> does not match: This rule is disabled
+2020-11-27 18:41:36,874 [20] [cmk.base.notify] Executing 1 notifications:
+2020-11-27 18:41:36,874 [20] [cmk.base.notify]   * notifying mailto:justdoit@test.com via telegram.py, parameters: telegram_bot_token, telegram_chat_id, graphs, bulk: no
+2020-11-27 18:41:36,874 [40] [cmk.base.notify]     ERROR:
+Traceback (most recent call last):
+  File "/omd/sites/sol/lib/python3/cmk/base/notify.py", line 610, in _process_notifications
+    plugin_context = create_plugin_context(raw_context, params)
+  File "/omd/sites/sol/lib/python3/cmk/base/notify.py", line 1424, in create_plugin_context
+    events.add_to_event_context(plugin_context, "PARAMETER", params)
+  File "/omd/sites/sol/lib/python3/cmk/base/events.py", line 773, in add_to_event_context
+    add_to_event_context(plugin_context, varname, value)
+  File "/omd/sites/sol/lib/python3/cmk/base/events.py", line 757, in add_to_event_context
+    plugin_context[prefix + "S"] = " ".join(param)
+TypeError: sequence item 0: expected str instance, int found
+2020-11-27 18:42:21,015 [20] [cmk.base.notify] Replaying notification 0 from backlog...

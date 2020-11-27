@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Telegram
 
+# TODO: Put this in classes. Currently it is pretty messy
 import os
 import json
 import requests
@@ -115,18 +116,27 @@ def telegram_send_mediagroup(context, photo_data, media_description):
         # "photo_2": binary data
     })
 
+def should_send_graph(context, notification_status):
+    enabled_for = context.get(GRAPH_CONFIG_FIELD, [])
+    return notification_status in enabled_for
+
 def main(host_template, service_template):
     context = utils.collect_context()
 
     if context["WHAT"] == "SERVICE":
         text = service_template % utils.service_url_from_context(context)
+        notification_status = int(context["SERVICESTATEID"])
     else:
         text = host_template % utils.host_url_from_context(context)
+        notification_status = int(context["HOSTSTATEID"])
     text = utils.substitute_context(text, context)
 
     try:
-        # fetch images
-        attachments, _ = render_performance_graphs(context)
+        if should_send_graph(context, notification_status):
+            # fetch images
+            attachments, _ = render_performance_graphs(context)
+        else:
+            attachments = []
 
         if len(attachments) == 1: # exactly one picture, send as photo with caption
             _, _, att_data, _ = attachments[0]

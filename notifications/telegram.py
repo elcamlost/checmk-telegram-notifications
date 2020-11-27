@@ -9,8 +9,10 @@ from sys import stderr, exit as s_exit
 from cmk.notification_plugins import utils
 from cmk.notification_plugins.mail import render_performance_graphs
 
-CHAT_ID_FIELD = "PARAMETER_TELEGRAM_CHAT_ID" # for notification parameters
-ALTERNATIVE_CHAT_ID_FIELD = "CONTACT_TELEGRAM_CHAT_ID" # for custom attributes
+CHAT_ID_FIELD_NAMES = [
+    "PARAMETER_TELEGRAM_CHAT_ID", # for notification parameters
+    "CONTACT_TELEGRAM_CHAT_ID" # for custom attributes
+]
 BOT_TOKEN_FIELD = "PARAMETER_TELEGRAM_BOT_TOKEN"
 
 # TODO: stop linking hostname/service descr?
@@ -43,10 +45,10 @@ def telegram_bot_token(context):
     raise AttributeError("Unable to find context variable '%s'" % BOT_TOKEN_FIELD)
 
 def telegram_chat_id(context):
-    for fieldname in [CHAT_ID_FIELD, ALTERNATIVE_CHAT_ID_FIELD]:
+    for fieldname in CHAT_ID_FIELD_NAMES:
         if fieldname in context and context[fieldname] != 0:
             return context[fieldname]
-    raise AttributeError("Unable to find context variable '%s' or '%s'" % (CHAT_ID_FIELD, ALTERNATIVE_CHAT_ID_FIELD))
+    raise AttributeError("Unable to find chat ID in any field: %s" % ",".join(CHAT_ID_FIELD_NAMES))
 
 def telegram_url_for(command, context, hide_token=False):
     return "https://api.telegram.org/bot%s/%s" % (telegram_bot_token(context) if not hide_token else "****", command)

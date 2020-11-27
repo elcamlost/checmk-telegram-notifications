@@ -24,7 +24,7 @@ class NotificationParameterTelegram(NotificationParameter):
     def spec(self):
         return Dictionary(
             title=_("Call with the following parameters"),
-            optional_keys=["url_prefix", "graphs"],
+            optional_keys=["url_prefix", "telegram_graph_config"],
             elements=[
                 ("telegram_bot_token",
                  Password(
@@ -54,7 +54,7 @@ class NotificationParameterTelegram(NotificationParameter):
                      default_value="",
                  )),
                 (
-                    "graphs",
+                    "telegram_graph_config",
                     # Dictionary(
                     #     title=_("Configure when to show graphs"),
                     #     help=_("This setting allows to configure when to send or not to send graphs to a notification. "

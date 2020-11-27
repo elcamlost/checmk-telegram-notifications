@@ -21,7 +21,6 @@ from cmk.gui.plugins.wato.notifications import (
     transform_forth_html_mail_url_prefix
 )
 
-# TODO: parameters show as "???" in WATO
 @notification_parameter_registry.register
 class NotificationParameterTelegram(NotificationParameter):
     @property
@@ -30,7 +29,13 @@ class NotificationParameterTelegram(NotificationParameter):
 
     @property
     def spec(self):
-        return Dictionary(elements=[
+        return Dictionary(
+            title=_("Call with the following parameters"),
+            optional_keys=[
+                "url_prefix",
+                "graphs"
+            ],
+            elements=[
             ("telegram_bot_token",
                 Password(
                     title=_("Telegram bot token"),

@@ -14,6 +14,7 @@ CHAT_ID_FIELD_NAMES = [
     "CONTACT_TELEGRAM_CHAT_ID" # for custom attributes
 ]
 BOT_TOKEN_FIELD = "PARAMETER_TELEGRAM_BOT_TOKEN"
+GRAPH_CONFIG_FIELD = "PARAMETER_TELEGRAM_GRAPH_CONFIG"
 
 # TODO: stop linking hostname/service descr?
 HOST_TEMPLATE = """<b>Check_MK: <a href="%s">$HOSTNAME$ - $EVENT_TXT$</a></b>

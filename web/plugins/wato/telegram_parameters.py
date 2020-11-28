@@ -53,7 +53,12 @@ class NotificationParameterTelegram(NotificationParameter):
                   size=64,
                   default_value="",
               )),
-              # TODO: Test this - it might not work with dict either (in which case we'd have to use single checkboxes...)""
+              # TODO: Test this - it might not work with dict either (in which case we'd have to use single checkboxes...)"
+              # --> it gets serialized as this:
+              # 'NOTIFY_PARAMETER_TELEGRAM_GRAPH_CONFIG_0': 'True',
+              # 'NOTIFY_PARAMETER_TELEGRAM_GRAPH_CONFIG_1': 'True',
+              # 'NOTIFY_PARAMETER_TELEGRAM_GRAPH_CONFIG_2': 'True',
+              # 'NOTIFY_PARAMETER_TELEGRAM_GRAPH_CONFIG_3': 'True',
              ("telegram_graph_config",
               Dictionary(
                   title=_("Configure when to show graphs"),

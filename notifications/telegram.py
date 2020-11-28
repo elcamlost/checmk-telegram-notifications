@@ -117,8 +117,13 @@ def telegram_send_mediagroup(context, photo_data, media_description):
     })
 
 def should_send_graph(context, notification_status):
-    enabled_for = context.get(GRAPH_CONFIG_FIELD, [])
-    return notification_status in enabled_for
+    send_list = []
+
+    for enabled in filter(lambda e: e.startswith(GRAPH_CONFIG_FIELD), context):
+        if bool(enabled):
+            send_list.append(int(enabled[:-1]))
+
+    return notification_status in send_list
 
 def main(host_template, service_template):
     context = utils.collect_context()

@@ -123,6 +123,9 @@ def should_send_graph(context, notification_status):
 
     return notification_status in send_list
 
+def replace_newlines(text):
+    return text.replace("\\n", "\n")
+
 def main(host_template, service_template):
     context = utils.collect_context()
 
@@ -133,6 +136,7 @@ def main(host_template, service_template):
         text = host_template % utils.host_url_from_context(context)
         notification_status = int(context["HOSTSTATEID"])
     text = utils.substitute_context(text, context)
+    text = replace_newlines(text)
 
     try:
         if should_send_graph(context, notification_status):

@@ -17,7 +17,6 @@ CHAT_ID_FIELD_NAMES = [
 BOT_TOKEN_FIELD = "PARAMETER_TELEGRAM_BOT_TOKEN"
 GRAPH_CONFIG_FIELD = "PARAMETER_TELEGRAM_GRAPH_CONFIG"
 
-# TODO: stop linking hostname/service descr?
 HOST_TEMPLATE = """<b>Check_MK: <a href="%s">$HOSTNAME$ - $EVENT_TXT$</a></b>
 <code>
 Host:     $HOSTNAME$
@@ -27,8 +26,6 @@ Event:    $EVENT_TXT$
 Output:   $HOSTOUTPUT$
 
 $LONGHOSTOUTPUT$</code>"""
-
-# TODO: add parameter to define URL prefix like for mail
 
 SERVICE_TEMPLATE = """<b>Check_MK: <a href="%s">$HOSTNAME$/$SERVICEDESC$ $EVENT_TXT$</a></b>
 <code>

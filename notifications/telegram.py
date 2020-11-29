@@ -119,9 +119,10 @@ def telegram_send_mediagroup(context, photo_data, media_description):
 def should_send_graph(context, notification_status):
     send_list = []
 
-    for enabled in filter(lambda e: e.startswith(GRAPH_CONFIG_FIELD), context):
-        if bool(enabled):
-            send_list.append(int(enabled[:-1]))
+    for setting in filter(lambda e: e.startswith(GRAPH_CONFIG_FIELD), context):
+        if context[setting] == "True":
+            # variables are named <GRAPH_CONFIG_FIELD>_X where X is the checkmk status ID
+            send_list.append(int(setting[-1]))
 
     return notification_status in send_list
 

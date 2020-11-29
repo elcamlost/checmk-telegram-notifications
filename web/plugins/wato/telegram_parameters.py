@@ -53,8 +53,7 @@ class NotificationParameterTelegram(NotificationParameter):
                   size=64,
                   default_value="",
               )),
-              # TODO: Test this - it might not work with dict either (in which case we'd have to use single checkboxes...)"
-              # --> it gets serialized as this:
+              # A dictionary gets serialized like follows:
               # 'NOTIFY_PARAMETER_TELEGRAM_GRAPH_CONFIG_0': 'True',
               # 'NOTIFY_PARAMETER_TELEGRAM_GRAPH_CONFIG_1': 'True',
               # 'NOTIFY_PARAMETER_TELEGRAM_GRAPH_CONFIG_2': 'True',
@@ -84,13 +83,4 @@ class NotificationParameterTelegram(NotificationParameter):
                                 label=_("when state is UNKNOWN"))),
                   ],
                   optional_keys=[]))
-             # ListOf(
-             #     MonitoringState(),
-             #     title=_("Configure when to show graphs"),
-             #     help=_(
-             #         "This setting allows to configure when to send or not to send graphs to a notification. "
-             #         "Default is to always send graphs."),
-             #     default_value=[0, 1, 2, 3]
-             #     # TODO: disable reordering
-             # ))
              ])

@@ -91,6 +91,7 @@ class TelegramConfig():
         if not self.__bot_token:
             if self.bot_token_field_name in self.__context:
                 self.__bot_token = self.__context[self.bot_token_field_name]
+                return self.__bot_token
             raise AttributeError("Unable to find context variable '%s'" %
                                  self.bot_token_field_name)
         return self.__bot_token
@@ -102,6 +103,7 @@ class TelegramConfig():
                 if fieldname in self.__context and self.__context[
                         fieldname] != 0:
                     self.__chat_id = self.__context[fieldname]
+                    return self.__chat_id
             raise AttributeError("Unable to find chat ID in any field: %s" %
                                  ",".join(self.chat_id_field_names))
         return self.__chat_id

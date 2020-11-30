@@ -7,8 +7,11 @@ import json
 import requests
 from sys import stderr, exit as s_exit
 
+#pylint: disable=import-error
+# disable checkmk import errors
 from cmk.notification_plugins import utils
 from cmk.notification_plugins.mail import render_performance_graphs, event_templates
+#pylint: enable=import-error
 
 
 class TelegramConfig():
@@ -183,7 +186,6 @@ class TelegramNotifier():
                               "media": json.dumps(media_description)
                           })
 
-    # TODO: refactor
     def notify(self):
         text = self.__config.notification_content()
 

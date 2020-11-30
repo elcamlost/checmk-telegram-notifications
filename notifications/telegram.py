@@ -19,30 +19,20 @@ class TelegramConfig():
         "CONTACT_TELEGRAM_CHAT_ID"  # for custom attributes
     ]
 
-    notification_host_template = """<b>$NOTIFICATIONTYPE$: <a href="%s">$HOSTNAME$</a> $EVENT_TXT$</b>
-<code>
-Host:     $HOSTNAME$
-Alias:    $HOSTALIAS$
-Address:  $HOSTADDRESS$
-Event:    $EVENT_TXT$
-Output:   $HOSTOUTPUT$
+    notification_host_template = "\n".join([
+        "<b>$NOTIFICATIONTYPE$: <a href=\"%s\">$HOSTNAME$</a> $EVENT_TXT$</b>",
+        "<code>", "Host:     $HOSTNAME$", "Alias:    $HOSTALIAS$",
+        "Address:  $HOSTADDRESS$", "Event:    $EVENT_TXT$",
+        "Output:   $HOSTOUTPUT$", "", "Detail:", "$LONGHOSTOUTPUT$", "</code>"
+    ])
 
-Detail:
-$LONGHOSTOUTPUT$
-</code>"""
-
-    notification_service_template = """<b>$NOTIFICATIONTYPE$: <a href="%s">$HOSTNAME$/$SERVICEDESC$</a> $EVENT_TXT$</b>
-<code>
-Host:     $HOSTNAME$
-Alias:    $HOSTALIAS$
-Address:  $HOSTADDRESS$
-Service:  $SERVICEDESC$
-Event:    $EVENT_TXT$
-Output:   $SERVICEOUTPUT$
-
-Detail:
-$LONGSERVICEOUTPUT$
-</code>"""
+    notification_service_template = "\n".join([
+        "<b>$NOTIFICATIONTYPE$: <a href=\"%s\">$HOSTNAME$/$SERVICEDESC$</a> $EVENT_TXT$</b>",
+        "<code>", "Host:     $HOSTNAME$", "Alias:    $HOSTALIAS$",
+        "Address:  $HOSTADDRESS$", "Service:  $SERVICEDESC$",
+        "Event:    $EVENT_TXT$", "Output:   $SERVICEOUTPUT$", "", "Detail:",
+        "$LONGSERVICEOUTPUT$", "</code>"
+    ])
 
     def __init__(self):
         self.__context = utils.collect_context()

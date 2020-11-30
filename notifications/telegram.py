@@ -187,7 +187,7 @@ class TelegramNotifier():
                           })
 
     def notify(self):
-        text = self.__config.notification_content()
+        text = self.__config.notification_content
 
         try:
             attachments = self.__config.performance_graphs

@@ -60,13 +60,13 @@ $LONGSERVICEOUTPUT$
         return text.replace("\\n", "\n")
 
     @property
-    def __is_service_notification(self):
+    def _is_service_notification(self):
         return self.__context["WHAT"] == "SERVICE"
 
     @property
-    def __notification_status(self):
-        if not self.__notification_status:
-            if self.__is_service_notification:
+    def _notification_status(self):
+        if not self._notification_status:
+            if self._is_service_notification:
                 return int(self.__context["SERVICESTATEID"])
             else:
                 return int(self.__context["HOSTSTATEID"])
@@ -82,7 +82,7 @@ $LONGSERVICEOUTPUT$
                 # variables are named <GRAPH_CONFIG_FIELD>_X where X is the checkmk status ID
                 send_list.append(int(setting[-1]))
 
-        return self.__notification_status in send_list
+        return self._notification_status in send_list
 
     @property
     def performance_graphs(self):
@@ -112,7 +112,7 @@ $LONGSERVICEOUTPUT$
 
     @property
     def notification_content(self):
-        if self.__is_service_notification:
+        if self._is_service_notification:
             text = self.notification_service_template % utils.service_url_from_context(
                 self.__context)
         else:

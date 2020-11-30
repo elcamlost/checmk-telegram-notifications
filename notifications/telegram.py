@@ -72,7 +72,7 @@ $LONGSERVICEOUTPUT$
                 return int(self.__context["HOSTSTATEID"])
 
     @property
-    def should_send_graph(self):
+    def _should_send_graphs(self):
         send_list = []
 
         for setting in filter(
@@ -86,7 +86,9 @@ $LONGSERVICEOUTPUT$
 
     @property
     def performance_graphs(self):
-        return render_performance_graphs(self.__context)
+        if self._should_send_graphs:
+            return render_performance_graphs(self.__context)
+        return []
 
     @property
     def bot_token(self):
@@ -192,13 +194,7 @@ class TelegramNotifier():
         text = self.__config.notification_content()
 
         try:
-            # TODO: this could all be put directly into "performance_graphs" function of config
-            # which would return an empty list when graphs should not be sent
-            if self.__config.should_send_graph():
-                # fetch images
-                attachments, _ = self.__config.performance_graphs
-            else:
-                attachments = []
+            attachments = self.__config.performance_graphs
 
             if len(attachments
                    ) == 1:  # exactly one picture, send as photo with caption

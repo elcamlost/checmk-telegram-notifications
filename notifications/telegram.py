@@ -128,7 +128,7 @@ class TelegramNotifier():
         return "https://api.telegram.org/bot%s/%s" % (
             self.__config.bot_token if not hide_token else "****", endpoint)
 
-    def _api_command(self, endpoint, context, files=None, **kwargs):
+    def _api_command(self, endpoint, files=None, **kwargs):
         json_data = dict({"chat_id": self.__config.chat_id}, **kwargs)
 
         if not files:

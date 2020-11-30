@@ -83,7 +83,7 @@ class TelegramConfig():
     @property
     def performance_graphs(self):
         if self._should_send_graphs:
-            return render_performance_graphs(self.__context)
+            return render_performance_graphs(self.__context)[0]
         return []
 
     @property

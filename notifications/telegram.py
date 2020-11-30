@@ -50,6 +50,8 @@ $LONGSERVICEOUTPUT$
         self.__bot_token = None
         self.__chat_id = None
 
+    # Protected helpers
+
     def _extend_context(self):
         "Enrich context by some custom fields"
         txt, _ = event_templates(self.__context["NOTIFICATIONTYPE"])
@@ -83,6 +85,8 @@ $LONGSERVICEOUTPUT$
                 send_list.append(int(setting[-1]))
 
         return self._notification_status in send_list
+
+    # Publics
 
     @property
     def performance_graphs(self):

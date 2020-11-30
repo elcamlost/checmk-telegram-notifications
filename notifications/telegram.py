@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # Telegram
 
-# TODO: Test whether the new code works
 import os
 import json
 import requests
@@ -47,6 +46,8 @@ class TelegramConfig():
 
     def _extend_context(self):
         "Enrich context by some custom fields"
+
+        # TODO: use a nicer arrow than XXX -> YYY?
         txt, _ = event_templates(self.__context["NOTIFICATIONTYPE"])
         self.__context["EVENT_TXT"] = utils.substitute_context(
             txt.replace("@", self.__context["WHAT"]), self.__context)

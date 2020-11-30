@@ -8,7 +8,7 @@ import requests
 from sys import stderr, exit as s_exit
 
 from cmk.notification_plugins import utils
-from cmk.notification_plugins.mail import render_performance_graphs
+from cmk.notification_plugins.mail import render_performance_graphs, event_templates
 
 
 class TelegramConfig():
@@ -46,8 +46,15 @@ $LONGSERVICEOUTPUT$
 
     def __init__(self):
         self.__context = utils.collect_context()
+        self._extend_context()
         self.__bot_token = None
         self.__chat_id = None
+
+    def _extend_context(self):
+        "Enrich context by some custom fields"
+        txt, _ = event_templates(self.__context["NOTIFICATIONTYPE"])
+        self.__context["EVENT_TXT"] = utils.substitute_context(
+            txt.replace("@", self.__context["WHAT"]), self.__context)
 
     def _replace_newlines(self, text):
         return text.replace("\\n", "\n")
@@ -68,7 +75,9 @@ $LONGSERVICEOUTPUT$
     def should_send_graph(self):
         send_list = []
 
-        for setting in filter(lambda e: e.startswith(self.graph_config_field_name), self.__context):
+        for setting in filter(
+                lambda e: e.startswith(self.graph_config_field_name),
+                self.__context):
             if self.__context[setting] == "True":
                 # variables are named <GRAPH_CONFIG_FIELD>_X where X is the checkmk status ID
                 send_list.append(int(setting[-1]))
@@ -102,14 +111,16 @@ $LONGSERVICEOUTPUT$
     @property
     def notification_content(self):
         if self.__is_service_notification:
-            text = self.notification_service_template % utils.service_url_from_context(self.__context)
+            text = self.notification_service_template % utils.service_url_from_context(
+                self.__context)
         else:
-            text = self.notification_host_template % utils.host_url_from_context(self.__context)
+            text = self.notification_host_template % utils.host_url_from_context(
+                self.__context)
         text = utils.substitute_context(text, self.__context)
         text = self._replace_newlines(text)
 
         return text
-    
+
 
 class TelegramNotifier():
     def __init__(self, config):
@@ -152,11 +163,11 @@ class TelegramNotifier():
 
     def _send_photo(self, caption, photo_data):
         self._api_command("sendPhoto",
-                           files={"photo": photo_data},
-                           **{
-                               "parse_mode": "html",
-                               "caption": caption
-                           })
+                          files={"photo": photo_data},
+                          **{
+                              "parse_mode": "html",
+                              "caption": caption
+                          })
 
     def _send_mediagroup(self, photo_data, media_description):
         """
@@ -170,11 +181,11 @@ class TelegramNotifier():
         """
 
         self._api_command("sendMediaGroup",
-                           files=photo_data,
-                           **{
-                               "disable_notification": True,
-                               "media": json.dumps(media_description)
-                           })
+                          files=photo_data,
+                          **{
+                              "disable_notification": True,
+                              "media": json.dumps(media_description)
+                          })
 
     # TODO: refactor
     def notify(self):
@@ -190,7 +201,7 @@ class TelegramNotifier():
                 attachments = []
 
             if len(attachments
-                ) == 1:  # exactly one picture, send as photo with caption
+                   ) == 1:  # exactly one picture, send as photo with caption
                 _, _, att_data, _ = attachments[0]
                 self._send_photo(text, att_data)
 
@@ -206,7 +217,10 @@ class TelegramNotifier():
                     media_data[att_name] = att_data
 
                 # Add notification text as description
-                telegram_media[-1].update({"caption": text, "parse_mode": "html"})
+                telegram_media[-1].update({
+                    "caption": text,
+                    "parse_mode": "html"
+                })
 
                 self._send_mediagroup(media_data, telegram_media)
             else:  # no pictures, send text only
@@ -215,5 +229,6 @@ class TelegramNotifier():
         except AttributeError as atterr:
             stderr.write(repr(atterr))
             s_exit(2)
+
 
 TelegramNotifier(TelegramConfig()).notify()

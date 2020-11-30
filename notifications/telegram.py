@@ -98,7 +98,7 @@ class TelegramConfig():
 
     @property
     def chat_id(self):
-        if self.__chat_id:
+        if not self.__chat_id:
             for fieldname in self.chat_id_field_names:
                 if fieldname in self.__context and self.__context[
                         fieldname] != 0:

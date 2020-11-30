@@ -60,11 +60,10 @@ class TelegramConfig():
 
     @property
     def _notification_status(self):
-        if not self._notification_status:
-            if self._is_service_notification:
-                return int(self.__context["SERVICESTATEID"])
-            else:
-                return int(self.__context["HOSTSTATEID"])
+        if self._is_service_notification:
+            return int(self.__context["SERVICESTATEID"])
+        else:
+            return int(self.__context["HOSTSTATEID"])
 
     @property
     def _should_send_graphs(self):

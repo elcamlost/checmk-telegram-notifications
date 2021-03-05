@@ -1,16 +1,59 @@
 #!/usr/bin/env python3
 # Telegram
 
+import base64
 import os
 import json
 import requests
 from sys import stderr, exit as s_exit
+from urllib.parse import quote
+from urllib.request import urlopen
 
 #pylint: disable=import-error
 # disable checkmk import errors
 from cmk.notification_plugins import utils
-from cmk.notification_plugins.mail import render_performance_graphs, event_templates
+from cmk.notification_plugins.mail import event_templates
+import cmk.utils.site as site
 #pylint: enable=import-error
+
+
+class GraphFetcher():
+    def __init__(self, context):
+        self.what = context["WHAT"]
+        self.hostname = context["HOSTNAME"]
+
+        if self.is_service_notification:
+            self.svc_desc = context["SERVICEDESC"]
+        else:
+            self.svc_desc = "_HOST_"
+            
+    @property
+    def is_service_notification(self):
+        return self.what == "SERVICE"
+
+    def render_performance_graphs(self):
+        url = "http://localhost:%d/%s/check_mk/ajax_graph_images.py" % (
+            site.get_apache_port(),
+            os.environ["OMD_SITE"],
+        )
+
+        try:
+            json_data = requests.get(url, {
+                "host": self.hostname,
+                "service": self.svc_desc,
+                "num_graphs": 10 # this is the maximum allowed by Telegram
+            }).json()
+        except Exception as e:
+            stderr.write("ERROR: Failed to fetch graphs: %s\nURL: %s\n" %
+                         (e, url))
+            return []
+
+        attachments = []
+        for i, base64_source in enumerate(json_data):
+            filename = '%s-%s-%d.png' % (self.hostname, self.svc_desc, i)
+            attachments.append((filename, base64.b64decode(base64_source)))
+        
+        return attachments
 
 
 class TelegramConfig():
@@ -84,7 +127,7 @@ class TelegramConfig():
     @property
     def performance_graphs(self):
         if self._should_send_graphs:
-            return render_performance_graphs(self.__context)[0]
+            return GraphFetcher(self.__context).render_performance_graphs()
         return []
 
     @property
@@ -196,13 +239,13 @@ class TelegramNotifier():
 
             if len(attachments
                    ) == 1:  # exactly one picture, send as photo with caption
-                _, _, att_data, _ = attachments[0]
+                _, att_data = attachments[0]
                 self._send_photo(text, att_data)
 
             elif len(attachments) > 1:  # more than one picture, send as album
                 telegram_media = []  # media description list for telegram API
                 media_data = {}  # the actual image data
-                for _, att_name, att_data, _ in attachments:
+                for att_name, att_data in attachments:
                     telegram_media.append({
                         "type": "photo",
                         "media": "attach://%s" % att_name

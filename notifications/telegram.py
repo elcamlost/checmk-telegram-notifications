@@ -26,7 +26,7 @@ class GraphFetcher():
             self.svc_desc = context["SERVICEDESC"]
         else:
             self.svc_desc = "_HOST_"
-            
+
     @property
     def is_service_notification(self):
         return self.what == "SERVICE"
@@ -52,7 +52,7 @@ class GraphFetcher():
         for i, base64_source in enumerate(json_data):
             filename = '%s-%s-%d.png' % (self.hostname, self.svc_desc, i)
             attachments.append((filename, base64.b64decode(base64_source)))
-        
+
         return attachments
 
 
@@ -82,6 +82,7 @@ class TelegramConfig():
     def __init__(self):
         self.__context = utils.collect_context()
         self._extend_context()
+        self._sanitize_context()
         self.__bot_token = None
         self.__chat_id = None
 
@@ -94,6 +95,16 @@ class TelegramConfig():
         txt, _ = event_templates(self.__context["NOTIFICATIONTYPE"])
         self.__context["EVENT_TXT"] = utils.substitute_context(
             txt.replace("@", self.__context["WHAT"]), self.__context)
+
+    def _sanitize_context(self):
+        what_output = "%sOUTPUT" % self.__context["WHAT"]
+        what_long_output = "LONG%sOUTPUT" % self.__context["WHAT"]
+        for search, replace in [
+                ( "<", "&lt;" ),
+                ( ">", "&gt;" )
+            ]:
+            self.__context[what_output] = self.__context[what_output].replace(search, replace)
+            self.__context[what_long_output] = self.__context[what_long_output].replace(search, replace)
 
     def _replace_newlines(self, text):
         return text.replace("\\n", "\n")

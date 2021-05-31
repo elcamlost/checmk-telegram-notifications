@@ -7,7 +7,7 @@ DESCRIPTION="Telegram notification plugin"
 PLUGIN_VERSION="1.3.0"
 CHECKMK_MIN_VERSION="2.0.0"
 CHECKMK_PKG_VERSION=$CHECKMK_MIN_VERSION
-DOWNLOAD_URL=""
+DOWNLOAD_URL="https://bitbucket.org/Nerothank/checkmk_notify_telegram"
 
 SOURCE_PATH=$(pwd)
 OUTPUT_PATH=$(pwd)

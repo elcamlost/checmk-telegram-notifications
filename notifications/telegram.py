@@ -16,6 +16,9 @@ from cmk.notification_plugins.mail import event_templates
 import cmk.utils.site as site
 #pylint: enable=import-error
 
+# TODO: Add logging to allow better troubleshooting of issues?
+# TODO: Make service and host template configurable? (like ascii_mail)
+# TODO: Reconsider formatting of messages
 
 class GraphFetcher():
     def __init__(self, context):

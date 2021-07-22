@@ -15,19 +15,19 @@ import cmk.utils.site as site
 # TODO: Add logging to allow better troubleshooting of issues?
 # TODO: Make service and host template configurable? (like ascii_mail)
 
+
+def is_service_notification(context):
+    return context["WHAT"] == "SERVICE"
+
+
 class GraphFetcher():
     def __init__(self, context):
-        self.what = context["WHAT"]
         self.hostname = context["HOSTNAME"]
 
-        if self.is_service_notification:
+        if is_service_notification(context):
             self.svc_desc = context["SERVICEDESC"]
         else:
             self.svc_desc = "_HOST_"
-
-    @property
-    def is_service_notification(self):
-        return self.what == "SERVICE"
 
     def render_performance_graphs(self):
         url = "http://localhost:%d/%s/check_mk/ajax_graph_images.py" % (
@@ -104,15 +104,8 @@ class TelegramConfig():
                 search, replace)
 
     @property
-    def _is_service_notification(self):
-        return self.__context["WHAT"] == "SERVICE"
-
-    @property
     def _notification_status(self):
-        if self._is_service_notification:
-            return int(self.__context["SERVICESTATEID"])
-        else:
-            return int(self.__context["HOSTSTATEID"])
+        return int(self.__context["%sSTATEID" % self.__context["WHAT"]])
 
     @property
     def _should_send_graphs(self):
@@ -158,7 +151,7 @@ class TelegramConfig():
 
     @property
     def notification_content(self):
-        if self._is_service_notification:
+        if is_service_notification(self.__context):
             text = self.notification_service_template % utils.service_url_from_context(
                 self.__context)
         else:

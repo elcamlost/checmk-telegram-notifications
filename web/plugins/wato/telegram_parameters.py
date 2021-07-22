@@ -9,6 +9,7 @@ from cmk.gui.valuespec import (Integer, Password, Dictionary, TextAscii,
 from cmk.gui.plugins.wato import (
     notification_parameter_registry,
     NotificationParameter,
+    IndividualOrStoredPassword
 )
 from cmk.gui.plugins.wato.notifications import (
     transform_back_html_mail_url_prefix, transform_forth_html_mail_url_prefix)
@@ -35,7 +36,7 @@ class NotificationParameterTelegram(NotificationParameter):
             required_keys=["telegram_bot_token", "telegram_chat_id"],
             elements=
             [("telegram_bot_token",
-              Password(
+              IndividualOrStoredPassword(
                   title=_("Telegram bot token"),
                   help=
                   _("The API token for the telegram bot used to send notifications. It follows the format <tt><int>:<str></tt>."

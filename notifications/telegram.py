@@ -13,7 +13,6 @@ from cmk.notification_plugins.mail import event_templates
 import cmk.utils.site as site
 
 # TODO: Add logging to allow better troubleshooting of issues?
-# TODO: Make service and host template configurable? (like ascii_mail)
 
 
 def is_service_notification(context):
@@ -64,20 +63,32 @@ class TelegramConfig():
         "CONTACT_TELEGRAM_CHAT_ID"  # for custom attributes
     ]
 
-    notification_host_template = "\n".join([
-        "<b>$NOTIFICATIONTYPE$: <a href=\"%s\">$HOSTNAME$</a> $EVENT_TXT$</b>",
-        "<code>", "Host:     $HOSTNAME$", "Alias:    $HOSTALIAS$",
-        "Address:  $HOSTADDRESS$", "Event:    $EVENT_TXT$",
-        "Output:   $HOSTOUTPUT$", "", "Detail:", "$LONGHOSTOUTPUT$", "</code>"
-    ])
+    host_template_field_name = "PARAMETER_TELEGRAM_HOST_TEMPLATE"
+    default_host_template = "<b>$NOTIFICATIONTYPE$: $LINKEDHOSTNAME$ $EVENT_TXT$</b>\n" + \
+                      "<code>\n" + \
+                      "Host:     $HOSTNAME$\n"+ \
+                      "Alias:    $HOSTALIAS$\n" + \
+                      "Address:  $HOSTADDRESS$\n" + \
+                      "Event:    $EVENT_TXT$\n" + \
+                      "Output:   $HOSTOUTPUT$\n" + \
+                      "\n" + \
+                      "Detail:\n" + \
+                      "$LONGHOSTOUTPUT$\n" + \
+                      "</code>"
 
-    notification_service_template = "\n".join([
-        "<b>$NOTIFICATIONTYPE$: <a href=\"%s\">$HOSTNAME$/$SERVICEDESC$</a> $EVENT_TXT$</b>",
-        "<code>", "Host:     $HOSTNAME$", "Alias:    $HOSTALIAS$",
-        "Address:  $HOSTADDRESS$", "Service:  $SERVICEDESC$",
-        "Event:    $EVENT_TXT$", "Output:   $SERVICEOUTPUT$", "", "Detail:",
-        "$LONGSERVICEOUTPUT$", "</code>"
-    ])
+    service_template_field_name = "PARAMETER_TELEGRAM_SERVICE_TEMPLATE"
+    default_service_template = "<b>$NOTIFICATIONTYPE$: $LINKEDSERVICEDESC$ $EVENT_TXT$</b>\n" + \
+                      "<code>\n" + \
+                      "Host:     $HOSTNAME$\n" + \
+                      "Alias:    $HOSTALIAS$\n" + \
+                      "Address:  $HOSTADDRESS$\n" + \
+                      "Service:  $SERVICEDESC$\n" + \
+                      "Event:    $EVENT_TXT$\n" + \
+                      "Output:   $SERVICEOUTPUT$\n" + \
+                      "\n" + \
+                      "Detail:\n" + \
+                      "$LONGSERVICEOUTPUT$\n" + \
+                      "</code>"
 
     def __init__(self):
         self.__context = utils.collect_context()
@@ -89,9 +100,18 @@ class TelegramConfig():
     # Protected helpers
     def _extend_context(self):
         "Enrich context by some custom fields"
-        txt, _ = event_templates(self.__context["NOTIFICATIONTYPE"])
+        event_txt, _ = event_templates(self.__context["NOTIFICATIONTYPE"])
         self.__context["EVENT_TXT"] = utils.substitute_context(
-            txt.replace("@", self.__context["WHAT"]), self.__context)
+            event_txt.replace("@", self.__context["WHAT"]), self.__context)
+
+        self.__context["LINKEDHOSTNAME"] = utils.format_link(
+            '<a href="%s">%s</a>', utils.host_url_from_context(self.__context),
+            self.__context["HOSTNAME"])
+
+        self.__context["LINKEDSERVICEDESC"] = utils.format_link(
+            '<a href="%s">%s</a>',
+            utils.service_url_from_context(self.__context),
+            self.__context.get("SERVICEDESC", ''))
 
     def _escape_html_output(self):
         "Escape any HTML characters in output and long output"
@@ -152,11 +172,12 @@ class TelegramConfig():
     @property
     def notification_content(self):
         if is_service_notification(self.__context):
-            text = self.notification_service_template % utils.service_url_from_context(
-                self.__context)
+            text = self.__context.setdefault(self.service_template_field_name,
+                                             self.default_service_template)
         else:
-            text = self.notification_host_template % utils.host_url_from_context(
-                self.__context)
+            text = self.__context.setdefault(self.host_template_field_name,
+                                             self.default_host_template)
+
         text = utils.substitute_context(text, self.__context)
 
         return text.replace("\\n", "\n")

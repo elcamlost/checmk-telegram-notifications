@@ -20,6 +20,7 @@ import cmk.utils.site as site
 # TODO: Make service and host template configurable? (like ascii_mail)
 # TODO: Reconsider formatting of messages
 
+
 class GraphFetcher():
     def __init__(self, context):
         self.what = context["WHAT"]
@@ -41,11 +42,13 @@ class GraphFetcher():
         )
 
         try:
-            json_data = requests.get(url, {
-                "host": self.hostname,
-                "service": self.svc_desc,
-                "num_graphs": 10 # this is the maximum allowed by Telegram
-            }).json()
+            json_data = requests.get(
+                url,
+                {
+                    "host": self.hostname,
+                    "service": self.svc_desc,
+                    "num_graphs": 10  # this is the maximum allowed by Telegram
+                }).json()
         except Exception as e:
             stderr.write("ERROR: Failed to fetch graphs: %s\nURL: %s\n" %
                          (e, url))
@@ -85,32 +88,26 @@ class TelegramConfig():
     def __init__(self):
         self.__context = utils.collect_context()
         self._extend_context()
-        self._sanitize_context()
+        self._escape_html_output()
         self.__bot_token = None
         self.__chat_id = None
 
     # Protected helpers
-
     def _extend_context(self):
         "Enrich context by some custom fields"
-
-        # TODO: use a nicer arrow than XXX -> YYY?
         txt, _ = event_templates(self.__context["NOTIFICATIONTYPE"])
         self.__context["EVENT_TXT"] = utils.substitute_context(
             txt.replace("@", self.__context["WHAT"]), self.__context)
 
-    def _sanitize_context(self):
-        what_output = "%sOUTPUT" % self.__context["WHAT"]
-        what_long_output = "LONG%sOUTPUT" % self.__context["WHAT"]
-        for search, replace in [
-                ( "<", "&lt;" ),
-                ( ">", "&gt;" )
-            ]:
-            self.__context[what_output] = self.__context[what_output].replace(search, replace)
-            self.__context[what_long_output] = self.__context[what_long_output].replace(search, replace)
-
-    def _replace_newlines(self, text):
-        return text.replace("\\n", "\n")
+    def _escape_html_output(self):
+        "Escape any HTML characters in output and long output"
+        output = "%sOUTPUT" % self.__context["WHAT"]
+        long_output = "LONG%sOUTPUT" % self.__context["WHAT"]
+        for search, replace in [("<", "&lt;"), (">", "&gt;")]:
+            self.__context[output] = self.__context[output].replace(
+                search, replace)
+            self.__context[long_output] = self.__context[long_output].replace(
+                search, replace)
 
     @property
     def _is_service_notification(self):
@@ -137,7 +134,6 @@ class TelegramConfig():
         return self._notification_status in send_list
 
     # Publics
-
     @property
     def performance_graphs(self):
         if self._should_send_graphs:
@@ -175,9 +171,8 @@ class TelegramConfig():
             text = self.notification_host_template % utils.host_url_from_context(
                 self.__context)
         text = utils.substitute_context(text, self.__context)
-        text = self._replace_newlines(text)
 
-        return text
+        return text.replace("\\n", "\n")
 
 
 class TelegramNotifier():

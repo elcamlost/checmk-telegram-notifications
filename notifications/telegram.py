@@ -115,6 +115,8 @@ class TelegramConfig():
 
     def _escape_html_output(self):
         "Escape any HTML characters in output and long output"
+
+        # NOTE: There is utils.html_escape_context. Since we need HTML tags in the templates, we may not use it, though.
         output = "%sOUTPUT" % self.__context["WHAT"]
         long_output = "LONG%sOUTPUT" % self.__context["WHAT"]
         for search, replace in [("<", "&lt;"), (">", "&gt;")]:
@@ -192,6 +194,7 @@ class TelegramNotifier():
             self.__config.bot_token if not hide_token else "****", endpoint)
 
     def _api_command(self, endpoint, files=None, **kwargs):
+        # NOTE: There is utils.post_request. However, this function assumes that context is not modified before submission. Thus, we may not use it.
         json_data = dict({"chat_id": self.__config.chat_id}, **kwargs)
 
         if not files:
@@ -203,16 +206,7 @@ class TelegramNotifier():
                                      data=json_data,
                                      files=files)
 
-        if response.status_code != 200:
-            raise Exception(
-                "%i: %s -> Unable to call %s. JSON Data: %s, Files: %s" % (
-                    int(response.status_code),
-                    response.reason,
-                    self._base_url(
-                        endpoint,
-                        hide_token=True),  # do not log the token value
-                    repr(json_data),
-                    str(files)[:50]))
+        utils.process_by_status_code(response)
 
     def _send_message(self, text):
         self._api_command(

@@ -14,6 +14,8 @@ import cmk.utils.site as site
 
 # TODO: Add logging to allow better troubleshooting of issues?
 
+TELEGRAM_SAFE_MAX_CAPTION_LENGTH = 800
+
 
 def is_service_notification(context):
     return context["WHAT"] == "SERVICE"
@@ -125,6 +127,46 @@ class TelegramConfig():
             self.__context[long_output] = self.__context[long_output].replace(
                 search, replace)
 
+    def _limit_message_length(self, template_text):
+        "Telegram supports at most 1024 characters for media captions. This function will cut overly long output information"
+
+        # FIXME: It would be better to parse the template into an object using context-senstive language parsing (HTML?) and handling each information on its own.
+        # E.g. handle whole HTML blocks of information (to not loose the end tag when cutting) and to allow more accurate length limitations.
+        # THis could be done by HTML parsing the template and iterating over any nodes that are found. Each node should then be processed line by line.
+        # Then, each single variable could be replaced one by one. Like this we could accurately determine the total message length. This in turn allows us to 
+        # precisely cut HTML nodes without potentialls losing their end tags.
+
+        what = lambda p: p % self.__context["WHAT"]
+
+        output = self.__context[what("%sOUTPUT")]
+        long_output = self.__context[what("LONG%sOUTPUT")]
+
+        template_length = len(template_text) * 2 # NOTE: This is just an approximation; most of the template _should_ be variables that get replaced
+        output_length = len(output)
+        long_output_length = len(long_output)
+
+        total_length = template_length + output_length + long_output_length
+
+        if total_length > TELEGRAM_SAFE_MAX_CAPTION_LENGTH: # NOTE: official max is 1024. Since we are approximating here we should allow some spare space, though
+            diff = total_length - TELEGRAM_SAFE_MAX_CAPTION_LENGTH
+
+            if long_output_length:
+                self.__context[what("LONG%sOUTPUT")] = "-CUT-" # we could just cut to the length we need. However, this way it is easier to handle
+                diff = diff - long_output_length + 5
+
+            if diff > 0: # Cutting long output did not suffice...
+                if output_length >= diff:
+                    self.__context[what("%sOUTPUT")] = output[:output_length - diff]
+                    diff = 0
+                elif output_length:
+                    self.__context[what("%sOUTPUT")] = "-CUT-"
+                    diff = diff - output_length + 5
+
+                    if diff - output_length + 5 > 0: # The message is STILL too long. Overwrite the template...
+                        return "There is an issue on $LINKEDHOSTNAME$. However, the notification would be too long to display and has been cut."
+
+        return template_text
+
     @property
     def _notification_status(self):
         return int(self.__context["%sSTATEID" % self.__context["WHAT"]])
@@ -174,13 +216,14 @@ class TelegramConfig():
     @property
     def notification_content(self):
         if is_service_notification(self.__context):
-            text = self.__context.setdefault(self.service_template_field_name,
+            template = self.__context.setdefault(self.service_template_field_name,
                                              self.default_service_template)
         else:
-            text = self.__context.setdefault(self.host_template_field_name,
+            template = self.__context.setdefault(self.host_template_field_name,
                                              self.default_host_template)
 
-        text = utils.substitute_context(text, self.__context)
+        template = self._limit_message_length(template)
+        text = utils.substitute_context(template, self.__context)
 
         return text.replace("\\n", "\n")
 
@@ -221,7 +264,7 @@ class TelegramNotifier():
                           files={"photo": photo_data},
                           **{
                               "parse_mode": "html",
-                              "caption": caption[:1024] # This is the maximum allowed length -> https://core.telegram.org/bots/api#sendphoto # TODO: This will break HTML formatting and yield another HTTP 400 by Telegram API...
+                              "caption": caption # FIXME: Max length for captions is 1024. Since we rely on templating and checkmk built-in functions, this may not be easily handled, though. Have a look at _limit_message_length
                           })
 
     def _send_mediagroup(self, photo_data, media_description):

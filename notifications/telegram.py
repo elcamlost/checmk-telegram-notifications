@@ -221,7 +221,7 @@ class TelegramNotifier():
                           files={"photo": photo_data},
                           **{
                               "parse_mode": "html",
-                              "caption": caption[:1024] # This is the maximum allowed length -> https://core.telegram.org/bots/api#sendphoto
+                              "caption": caption[:1024] # This is the maximum allowed length -> https://core.telegram.org/bots/api#sendphoto # TODO: This will break HTML formatting and yield another HTTP 400 by Telegram API...
                           })
 
     def _send_mediagroup(self, photo_data, media_description):

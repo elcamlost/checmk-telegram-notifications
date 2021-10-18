@@ -322,4 +322,5 @@ class TelegramNotifier():
             s_exit(2)
 
 
-TelegramNotifier(TelegramConfig()).notify()
+if __name__ == "__main__":
+    TelegramNotifier(TelegramConfig()).notify()

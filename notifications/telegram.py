@@ -155,7 +155,8 @@ class TelegramConfig():
         if not self.__bot_token:
             if self.bot_token_field_name in self.__context:
                 self.__bot_token = self.__context[self.bot_token_field_name]
-                return utils.retrieve_from_passwordstore(self.__bot_token)
+                self.__bot_token = utils.retrieve_from_passwordstore(self.__bot_token)
+                return self.__bot_token
             raise AttributeError("Unable to find context variable '%s'" %
                                  self.bot_token_field_name)
         return self.__bot_token

@@ -6,8 +6,6 @@ import os
 import json
 import requests
 from sys import stderr, exit as s_exit
-from urllib.parse import quote
-from urllib.request import urlopen
 from cmk.notification_plugins import utils
 from cmk.notification_plugins.mail import event_templates
 import cmk.utils.site as site
@@ -22,6 +20,7 @@ def is_service_notification(context):
 
 
 class GraphFetcher():
+
     def __init__(self, context):
         self.hostname = context["HOSTNAME"]
 
@@ -127,46 +126,6 @@ class TelegramConfig():
             self.__context[long_output] = self.__context[long_output].replace(
                 search, replace)
 
-    def _limit_message_length(self, template_text):
-        "Telegram supports at most 1024 characters for media captions. This function will cut overly long output information"
-
-        # FIXME: It would be better to parse the template into an object using context-senstive language parsing (HTML?) and handling each information on its own.
-        # E.g. handle whole HTML blocks of information (to not loose the end tag when cutting) and to allow more accurate length limitations.
-        # THis could be done by HTML parsing the template and iterating over any nodes that are found. Each node should then be processed line by line.
-        # Then, each single variable could be replaced one by one. Like this we could accurately determine the total message length. This in turn allows us to 
-        # precisely cut HTML nodes without potentialls losing their end tags.
-
-        what = lambda p: p % self.__context["WHAT"]
-
-        output = self.__context[what("%sOUTPUT")]
-        long_output = self.__context[what("LONG%sOUTPUT")]
-
-        template_length = len(template_text) * 2 # NOTE: This is just an approximation; most of the template _should_ be variables that get replaced
-        output_length = len(output)
-        long_output_length = len(long_output)
-
-        total_length = template_length + output_length + long_output_length
-
-        if total_length > TELEGRAM_SAFE_MAX_CAPTION_LENGTH: # NOTE: official max is 1024. Since we are approximating here we should allow some spare space, though
-            diff = total_length - TELEGRAM_SAFE_MAX_CAPTION_LENGTH
-
-            if long_output_length:
-                self.__context[what("LONG%sOUTPUT")] = "-CUT-" # we could just cut to the length we need. However, this way it is easier to handle
-                diff = diff - long_output_length + 5
-
-            if diff > 0: # Cutting long output did not suffice...
-                if output_length >= diff:
-                    self.__context[what("%sOUTPUT")] = output[:output_length - diff]
-                    diff = 0
-                elif output_length:
-                    self.__context[what("%sOUTPUT")] = "-CUT-"
-                    diff = diff - output_length + 5
-
-                    if diff - output_length + 5 > 0: # The message is STILL too long. Overwrite the template...
-                        return "There is an issue on $LINKEDHOSTNAME$. However, the notification would be too long to display and has been cut."
-
-        return template_text
-
     @property
     def _notification_status(self):
         return int(self.__context["%sSTATEID" % self.__context["WHAT"]])
@@ -222,10 +181,25 @@ class TelegramConfig():
             template = self.__context.setdefault(self.host_template_field_name,
                                              self.default_host_template)
 
-        template = self._limit_message_length(template)
         text = utils.substitute_context(template, self.__context)
 
         return text.replace("\\n", "\n")
+
+
+def exit_on_nonzero_only(func):
+    "Keep the program running if exit code is 0, otherwise exit"
+
+    def wrap(*args):
+        exit_code = 0
+        try:
+            func(*args)
+        except SystemExit as ex:
+            exit_code = ex.code
+        finally:
+            if exit_code != 0:
+                s_exit(exit_code)
+
+    return wrap
 
 
 class TelegramNotifier():
@@ -259,14 +233,18 @@ class TelegramNotifier():
                 "parse_mode": "html"
             })
 
-    def _send_photo(self, caption, photo_data):
+    @exit_on_nonzero_only
+    def _send_photo(self, photo_data):
+        # We could use the 'caption' property here to send an image description.
+        # However, the caption is limited to 1000 characters. Sending just the
+        # image and a separate text message is easier.
         self._api_command("sendPhoto",
                           files={"photo": photo_data},
                           **{
                               "parse_mode": "html",
-                              "caption": caption # FIXME: Max length for captions is 1024. Since we rely on templating and checkmk built-in functions, this may not be easily handled, though. Have a look at _limit_message_length
                           })
 
+    @exit_on_nonzero_only
     def _send_mediagroup(self, photo_data, media_description):
         """
         Send multiple media to telegram as one album.
@@ -277,6 +255,10 @@ class TelegramNotifier():
         https://core.telegram.org/bots/api#inputmediaphoto
         https://github.com/php-telegram-bot/core/issues/811
         """
+
+        # We could use the 'caption' property here to send an image description
+        # for the last media element. However, the caption is limited to 1000
+        # characters. Sending just the images and a separate text message is easier.
 
         self._api_command("sendMediaGroup",
                           files=photo_data,
@@ -294,7 +276,7 @@ class TelegramNotifier():
             if len(attachments
                    ) == 1:  # exactly one picture, send as photo with caption
                 _, att_data = attachments[0]
-                self._send_photo(text, att_data)
+                self._send_photo(att_data)
 
             elif len(attachments) > 1:  # more than one picture, send as album
                 telegram_media = []  # media description list for telegram API
@@ -307,15 +289,10 @@ class TelegramNotifier():
 
                     media_data[att_name] = att_data
 
-                # Add notification text as description
-                telegram_media[-1].update({
-                    "caption": text,
-                    "parse_mode": "html"
-                })
-
                 self._send_mediagroup(media_data, telegram_media)
-            else:  # no pictures, send text only
-                self._send_message(text)
+
+            # always send the notification text in a separate message to avoid length limitations
+            self._send_message(text)
 
         except AttributeError as atterr:
             stderr.write(repr(atterr))

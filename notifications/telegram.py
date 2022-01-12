@@ -155,10 +155,11 @@ class TelegramConfig():
         if not self.__bot_token:
             if self.bot_token_field_name in self.__context:
                 self.__bot_token = self.__context[self.bot_token_field_name]
-                self.__bot_token = utils.retrieve_from_passwordstore(self.__bot_token)
-                return self.__bot_token
-            raise AttributeError("Unable to find context variable '%s'" %
-                                 self.bot_token_field_name)
+                self.__bot_token = utils.retrieve_from_passwordstore(
+                    self.__bot_token)
+            else:
+                raise AttributeError("Unable to find context variable '%s'" %
+                                     self.bot_token_field_name)
         return self.__bot_token
 
     @property
@@ -168,19 +169,22 @@ class TelegramConfig():
                 if fieldname in self.__context and self.__context[
                         fieldname] != 0:
                     self.__chat_id = self.__context[fieldname]
-                    return self.__chat_id
-            raise AttributeError("Unable to find chat ID in any field: %s" %
-                                 ",".join(self.chat_id_field_names))
+                    break
+            else:
+                raise AttributeError(
+                    "Unable to find chat ID in any field: %s" %
+                    ",".join(self.chat_id_field_names))
         return self.__chat_id
 
     @property
     def notification_content(self):
         if is_service_notification(self.__context):
-            template = self.__context.setdefault(self.service_template_field_name,
-                                             self.default_service_template)
+            template = self.__context.setdefault(
+                self.service_template_field_name,
+                self.default_service_template)
         else:
             template = self.__context.setdefault(self.host_template_field_name,
-                                             self.default_host_template)
+                                                 self.default_host_template)
 
         text = utils.substitute_context(template, self.__context)
 
@@ -204,6 +208,7 @@ def exit_on_nonzero_only(func):
 
 
 class TelegramNotifier():
+
     def __init__(self, config):
         self.__config = config
 

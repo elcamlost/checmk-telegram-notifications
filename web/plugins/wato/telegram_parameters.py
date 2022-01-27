@@ -1,18 +1,11 @@
-import socket
-import cmk.gui.config as config
-
+#!/usr/bin/env python3
+#pylint:disable=line-too-long,missing-docstring
 from cmk.gui.i18n import _
-from cmk.gui.globals import html
-from cmk.gui.valuespec import (Integer, Password, Dictionary, TextAscii,
-                               Transform, Checkbox, CascadingDropdown, ListOf,
-                               MonitoringState, TextAreaUnicode)
-from cmk.gui.plugins.wato import (
-    notification_parameter_registry,
-    NotificationParameter,
-    IndividualOrStoredPassword
-)
-from cmk.gui.plugins.wato.notifications import (
-    transform_back_html_mail_url_prefix, transform_forth_html_mail_url_prefix)
+from cmk.gui.valuespec import (Integer, Dictionary, TextAscii, Checkbox,
+                               TextAreaUnicode)
+from cmk.gui.plugins.wato import (notification_parameter_registry,
+                                  NotificationParameter,
+                                  IndividualOrStoredPassword)
 
 _telegram_template_help = lambda what: _("Use telegram-compatible HTML, and checkmk macros to define the content to be shown in %s notifications. " % (what) + \
     "If your template contains unescaped, 'Telegram-invalid' HTML characters, sending notifications will fail with HTTP 400 Bad Request.<br>"
@@ -25,6 +18,7 @@ _telegram_template_help = lambda what: _("Use telegram-compatible HTML, and chec
 
 @notification_parameter_registry.register
 class NotificationParameterTelegram(NotificationParameter):
+
     @property
     def ident(self):
         return "telegram.py"

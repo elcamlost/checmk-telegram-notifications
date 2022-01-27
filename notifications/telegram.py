@@ -1,27 +1,31 @@
 #!/usr/bin/env python3
 # Telegram
+"Send Checkmk notifications to Telegram groups by using a bot"
 
 import base64
+from ctypes import Union
 import os
 import json
-import requests
 from sys import stderr, exit as s_exit
+from typing import Callable, Dict, List, Optional, Tuple, Any
+import requests
 from cmk.notification_plugins import utils
 from cmk.notification_plugins.mail import event_templates
-import cmk.utils.site as site
+from cmk.utils import site
 
 # TODO: Add logging to allow better troubleshooting of issues?
+# TODO: Add bulk
 
-TELEGRAM_SAFE_MAX_CAPTION_LENGTH = 800
 
-
-def is_service_notification(context):
+def is_service_notification(context: dict) -> bool:
+    "Decide whether a notification context is a service notification"
     return context["WHAT"] == "SERVICE"
 
 
 class GraphFetcher():
+    "Render graphs from Checkmk"
 
-    def __init__(self, context):
+    def __init__(self, context: dict) -> None:
         self.hostname = context["HOSTNAME"]
 
         if is_service_notification(context):
@@ -29,7 +33,8 @@ class GraphFetcher():
         else:
             self.svc_desc = "_HOST_"
 
-    def render_performance_graphs(self):
+    def render_performance_graphs(self) -> List[Tuple[str, str]]:
+        "Get performance graphs from Checkmk and return a list of (filename, b64 data)"
         url = "http://localhost:%d/%s/check_mk/ajax_graph_images.py" % (
             site.get_apache_port(),
             os.environ["OMD_SITE"],
@@ -43,9 +48,9 @@ class GraphFetcher():
                     "service": self.svc_desc,
                     "num_graphs": 10  # this is the maximum allowed by Telegram
                 }).json()
-        except Exception as e:
+        except (requests.RequestException, json.JSONDecodeError) as ex:
             stderr.write("ERROR: Failed to fetch graphs: %s\nURL: %s\n" %
-                         (e, url))
+                         (ex, url))
             return []
 
         attachments = []
@@ -57,6 +62,7 @@ class GraphFetcher():
 
 
 class TelegramConfig():
+    "Configuration container for the Telegram notifier"
     graph_config_field_name = "PARAMETER_TELEGRAM_GRAPH_CONFIG"
     bot_token_field_name = "PARAMETER_TELEGRAM_BOT_TOKEN"
     chat_id_field_names = [
@@ -117,7 +123,8 @@ class TelegramConfig():
     def _escape_html_output(self):
         "Escape any HTML characters in output and long output"
 
-        # NOTE: There is utils.html_escape_context. Since we need HTML tags in the templates, we may not use it, though.
+        # NOTE: There is utils.html_escape_context. Since we need HTML tags
+        # in the templates, we may not use it, though.
         output = "%sOUTPUT" % self.__context["WHAT"]
         long_output = "LONG%sOUTPUT" % self.__context["WHAT"]
         for search, replace in [("<", "&lt;"), (">", "&gt;")]:
@@ -145,13 +152,15 @@ class TelegramConfig():
 
     # Publics
     @property
-    def performance_graphs(self):
+    def performance_graphs(self) -> Union[List, List[Tuple[str, str]]]:
+        "Return performance graphs if enabled, otherwise empty list"
         if self._should_send_graphs:
             return GraphFetcher(self.__context).render_performance_graphs()
         return []
 
     @property
-    def bot_token(self):
+    def bot_token(self) -> str:
+        "Fetch the bot token from notification context"
         if not self.__bot_token:
             if self.bot_token_field_name in self.__context:
                 self.__bot_token = self.__context[self.bot_token_field_name]
@@ -163,7 +172,8 @@ class TelegramConfig():
         return self.__bot_token
 
     @property
-    def chat_id(self):
+    def chat_id(self) -> str:
+        "Fetch the chat ID from notification context"
         if not self.__chat_id:
             for fieldname in self.chat_id_field_names:
                 if fieldname in self.__context and self.__context[
@@ -177,7 +187,8 @@ class TelegramConfig():
         return self.__chat_id
 
     @property
-    def notification_content(self):
+    def notification_content(self) -> str:
+        "Format the text of the notification based on the context"
         if is_service_notification(self.__context):
             template = self.__context.setdefault(
                 self.service_template_field_name,
@@ -191,7 +202,7 @@ class TelegramConfig():
         return text.replace("\\n", "\n")
 
 
-def exit_on_nonzero_only(func):
+def exit_on_nonzero_only(func: Callable[[Any], None]) -> Callable[[Any], None]:
     "Keep the program running if exit code is 0, otherwise exit"
 
     def wrap(*args):
@@ -208,16 +219,24 @@ def exit_on_nonzero_only(func):
 
 
 class TelegramNotifier():
+    "Send checkmk notifications to Telegram"
 
-    def __init__(self, config):
+    def __init__(self, config: TelegramConfig) -> None:
         self.__config = config
 
-    def _base_url(self, endpoint, hide_token=False):
+    def _base_url(self,
+                  endpoint: str,
+                  hide_token: Optional[bool] = False) -> str:
         return "https://api.telegram.org/bot%s/%s" % (
             self.__config.bot_token if not hide_token else "****", endpoint)
 
-    def _api_command(self, endpoint, files=None, **kwargs):
-        # NOTE: There is utils.post_request. However, this function assumes that context is not modified before submission. Thus, we may not use it.
+    def _api_command(self,
+                     endpoint: str,
+                     files: Optional[Union[Dict[str, Tuple[str, str]],
+                                           List[Tuple[str, str]]]] = None,
+                     **kwargs) -> None:
+        # NOTE: There is utils.post_request. However, this function assumes
+        # that context is not modified before submission. Thus, we may not use it.
         json_data = dict({"chat_id": self.__config.chat_id}, **kwargs)
 
         if not files:
@@ -231,7 +250,7 @@ class TelegramNotifier():
 
         utils.process_by_status_code(response)
 
-    def _send_message(self, text):
+    def _send_message(self, text: str) -> None:
         self._api_command(
             "sendMessage", **{
                 "text": text,
@@ -240,7 +259,7 @@ class TelegramNotifier():
             })
 
     @exit_on_nonzero_only
-    def _send_photo(self, photo_data):
+    def _send_photo(self, photo_data: Tuple[str, str]) -> None:
         # We could use the 'caption' property here to send an image description.
         # However, the caption is limited to 1000 characters. Sending just the
         # image and a separate text message is easier.
@@ -248,10 +267,12 @@ class TelegramNotifier():
                           files={"photo": photo_data},
                           **{
                               "parse_mode": "html",
+                              "disable_notification": True,
                           })
 
     @exit_on_nonzero_only
-    def _send_mediagroup(self, photo_data, media_description):
+    def _send_mediagroup(self, photo_data: List[Tuple[str, str]],
+                         media_description: List[Dict[str, str]]) -> None:
         """
         Send multiple media to telegram as one album.
         photo_data => a key-value mapping in the format 'filename': 'image data'
@@ -273,7 +294,8 @@ class TelegramNotifier():
                               "media": json.dumps(media_description)
                           })
 
-    def notify(self):
+    def notify(self) -> None:
+        "Start the notification process"
         text = self.__config.notification_content
 
         try:

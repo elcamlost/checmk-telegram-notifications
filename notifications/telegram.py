@@ -3,11 +3,10 @@
 "Send Checkmk notifications to Telegram groups by using a bot"
 
 import base64
-from ctypes import Union
 import os
 import json
 from sys import stderr, exit as s_exit
-from typing import Callable, Dict, List, Optional, Tuple, Any
+from typing import Callable, Dict, List, Optional, Tuple, Any, Union
 import requests
 from cmk.notification_plugins import utils
 from cmk.notification_plugins.mail import event_templates

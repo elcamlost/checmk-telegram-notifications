@@ -15,6 +15,8 @@ from cmk.utils import site
 # TODO: Add logging to allow better troubleshooting of issues?
 # TODO: Add bulk
 
+TELEGRAM_MESSAGE_LEN_LIMIT = 4096
+
 
 def is_service_notification(context: dict) -> bool:
     "Decide whether a notification context is a service notification"
@@ -58,6 +60,59 @@ class GraphFetcher():
             attachments.append((filename, base64.b64decode(base64_source)))
 
         return attachments
+
+
+class TelegramMessage:
+    "Represents the message sent to Telegram"
+
+    def __init__(self, template: str, context: Dict[str, Any]) -> None:
+        self._template = template
+        self._context = context
+        self._full_message = utils.substitute_context(template, context)
+        self._truncated = None
+
+    @property
+    def content(self) -> str:
+        """
+        There is a limit to the text length that may be sent using Telegram.
+        Limit the message length in this function (if necessary)
+        """
+        if self._truncated:
+            return self._truncated
+
+        total_length = len(self._full_message)
+        if total_length <= TELEGRAM_MESSAGE_LEN_LIMIT:
+            # the raw message is within bounds, use it
+            self._truncated = self._full_message
+
+        else:  # the message would be too long
+            # consider long output and regular output (in this order) to truncate the message
+            for key in ["LONG%sOUTPUT", "%sOUTPUT"]:
+                keyname = key % self._context["WHAT"]
+
+                # the key is present and has any length
+                if keyname in self._context and self._context[keyname]:
+                    # determine its length
+                    key_value_length = len(self._context[keyname])
+
+                    # determine the maximum length the current value may have, before exceeding the lenght limit
+                    max_value_length = TELEGRAM_MESSAGE_LEN_LIMIT - (
+                        total_length - key_value_length)
+                    if max_value_length <= 0:
+                        # The value needs to be dropped
+                        self._context[keyname] = ""
+                        total_length -= key_value_length
+                    else:  # we may keep some characters
+                        self._context[keyname] = self._context[
+                            keyname][:max_value_length]
+
+                        # as we got some spare chars left, this means we may break here as the rest of the message needs not to be truncated
+                        break
+
+            self._parsed = utils.substitute_context(self._template,
+                                                    self._context)
+
+        return self._parsed
 
 
 class TelegramConfig():
@@ -196,9 +251,8 @@ class TelegramConfig():
             template = self.__context.setdefault(self.host_template_field_name,
                                                  self.default_host_template)
 
-        text = utils.substitute_context(template, self.__context)
-
-        return text.replace("\\n", "\n")
+        return TelegramMessage(template=template,
+                               context=self.__context).content
 
 
 def exit_on_nonzero_only(func: Callable[[Any], None]) -> Callable[[Any], None]:

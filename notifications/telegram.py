@@ -109,10 +109,10 @@ class TelegramMessage:
                         # as we got some spare chars left, this means we may break here as the rest of the message needs not to be truncated
                         break
 
-            self._parsed = utils.substitute_context(self._template,
+            self._truncated = utils.substitute_context(self._template,
                                                     self._context)
 
-        return self._parsed
+        return self._truncated
 
 
 class TelegramConfig():

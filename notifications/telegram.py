@@ -9,14 +9,8 @@ from sys import stderr, exit as s_exit
 from typing import Callable, Dict, List, Optional, Tuple, Any, Union
 import requests
 from cmk.notification_plugins import utils
-from cmk.notification_plugins.mail import event_templates
-from cmk.utils import site
-
-# TODO: Add logging to allow better troubleshooting of issues?
-# TODO: Add bulk
 
 TELEGRAM_MESSAGE_LEN_LIMIT = 4096
-
 
 def is_service_notification(context: dict) -> bool:
     "Decide whether a notification context is a service notification"
@@ -35,31 +29,14 @@ class GraphFetcher():
             self.svc_desc = "_HOST_"
 
     def render_performance_graphs(self) -> List[Tuple[str, str]]:
-        "Get performance graphs from Checkmk and return a list of (filename, b64 data)"
-        url = "http://localhost:%d/%s/check_mk/ajax_graph_images.py" % (
-            site.get_apache_port(),
-            os.environ["OMD_SITE"],
-        )
+        attachments: list[Attachment] = []
+        file_names = []
+        for graph in utils.render_cmk_graphs(context):
+            attachments.append(Attachment("img", graph.filename, graph.data, "inline"))
 
-        try:
-            json_data = requests.get(
-                url,
-                {
-                    "host": self.hostname,
-                    "service": self.svc_desc,
-                    "num_graphs": 10  # this is the maximum allowed by Telegram
-                }).json()
-        except (requests.RequestException, json.JSONDecodeError) as ex:
-            stderr.write("ERROR: Failed to fetch graphs: %s\nURL: %s\n" %
-                         (ex, url))
-            return []
+            file_names.append(graph.filename)
 
-        attachments = []
-        for i, base64_source in enumerate(json_data):
-            filename = '%s-%s-%d.png' % (self.hostname, self.svc_desc, i)
-            attachments.append((filename, base64.b64decode(base64_source)))
-
-        return attachments
+        return attachments, file_names
 
 
 class TelegramMessage:
@@ -160,8 +137,24 @@ class TelegramConfig():
 
     # Protected helpers
     def _extend_context(self):
-        "Enrich context by some custom fields"
-        event_txt, _ = event_templates(self.__context["NOTIFICATIONTYPE"])
+        notification_type = self.__context["NOTIFICATIONTYPE"]
+        if notification_type in ["PROBLEM", "RECOVERY"]:
+            event_txt = "$PREVIOUS@HARDSHORTSTATE$ -> $@SHORTSTATE$"
+
+        elif notification_type.startswith("FLAP"):
+            if "START" in notification_type:
+                event_txt = "Started Flapping"
+            else:
+                event_txt = "Stopped Flapping ($@SHORTSTATE$)"
+        elif notification_type.startswith("DOWNTIME"):
+            event_txt = "Downtime " + notification_type[8:].title() + " ($@SHORTSTATE$)"
+        elif notification_type == "ACKNOWLEDGEMENT":
+            event_txt = "Acknowledged ($@SHORTSTATE$)"
+        elif notification_type == "CUSTOM":
+            event_txt = "Custom Notification ($@SHORTSTATE$)"
+        else:
+            event_txt = notification_type  # Should never happen
+
         self.__context["EVENT_TXT"] = utils.substitute_context(
             event_txt.replace("@", self.__context["WHAT"]), self.__context)
 

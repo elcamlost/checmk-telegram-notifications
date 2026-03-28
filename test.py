@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
 
 import ast
+import importlib.util
 import os
-from notifications.telegram import TelegramConfig, TelegramNotifier
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+
+_path = str(Path(__file__).parent / "notifications" / "telegram")
+_loader = SourceFileLoader("telegram_plugin", _path)
+_spec = importlib.util.spec_from_file_location("telegram_plugin", _path, loader=_loader)
+_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_module)
+TelegramConfig = _module.TelegramConfig
+TelegramNotifier = _module.TelegramNotifier
 
 CONFIG_FILE = "test.cfg"
 

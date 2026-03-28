@@ -1,19 +1,60 @@
-# What is this? #
+# Checkmk Telegram Notification Plugin
 
-This is a checkmk notification plugin to allow sending notifications via Telegram bot. It supports sending plain text as well as graphs.
+A Checkmk notification plugin that sends monitoring alerts to a Telegram chat via a bot. Supports plain text notifications and performance graphs.
 
-# Setup #
+Requires **Checkmk 2.4+**.
 
-- Create a Telegram Bot using [BotFather](https://core.telegram.org/bots#6-botfather) and store the bot token
-- Either:
-  - Create a new telegram group and invite your new bot (look for it using `@Username` where Username is the value you entered at BotFather)
-  - Directly write your bot
-- Send at least one message
-- Get the chat ID of the chat by running
-  ```
-  BOT_TOKEN="<YOUR BOT TOKEN HERE>"
-  curl -svk https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=0 | grep "chat" -A 5 | grep 'id'
-  ```
-- Run the packaging script to create a checkmk package
-- Install the package on the checkmk host
-- Configure a notification rule where you set at least your chat ID and bot token
+## Setup
+
+### 1. Create a Telegram bot
+
+- Talk to [@BotFather](https://core.telegram.org/bots#6-botfather) and create a new bot
+- Copy the bot token (format: `<int>:<str>`)
+
+### 2. Get your chat ID
+
+Send at least one message to your bot or group, then run:
+
+```bash
+BOT_TOKEN="<YOUR BOT TOKEN>"
+curl -s "https://api.telegram.org/bot${BOT_TOKEN}/getUpdates" | grep '"chat"' -A 3 | grep '"id"'
+```
+
+### 3. Install the plugin
+
+Build the MKP package:
+
+```bash
+bash package.sh
+```
+
+Install on your Checkmk site:
+
+```bash
+mkp install telegram_notify.mkp
+```
+
+### 4. Configure a notification rule
+
+In Checkmk go to **Setup → Notifications** and create a new rule using the **Telegram** method. Set at minimum:
+
+- **Bot token** — from BotFather (supports the Checkmk password store)
+- **Chat ID** — from step 2 above (or set the custom attribute `TELEGRAM_CHAT_ID` per contact)
+
+### Optional: SOCKS5 proxy
+
+If your Checkmk server cannot reach `api.telegram.org` directly, configure a SOCKS5 proxy in the notification parameters. Username and password are optional and support the Checkmk password store.
+
+## Development
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install ".[dev]"
+.venv/bin/pytest -v
+```
+
+For manual end-to-end testing (sends a real notification):
+
+```bash
+.venv/bin/python test.py
+```

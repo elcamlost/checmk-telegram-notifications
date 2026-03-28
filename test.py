@@ -22,8 +22,14 @@ if os.path.isfile(CONFIG_FILE):
 else:
     config = {
         "PARAMETER_TELEGRAM_CHAT_ID": ("Telegram chat ID", int),
-        "PARAMETER_TELEGRAM_BOT_TOKEN": ("Telegram bot token", lambda v: f"password	{v.strip()}"),
-        "LINKEDSERVICEDESC": ("Full site URL", lambda v: f"<a href='{v.strip()}'>Some linked service</a>"),
+        "PARAMETER_TELEGRAM_BOT_TOKEN": (
+            "Telegram bot token",
+            lambda v: f"password	{v.strip()}",
+        ),
+        "LINKEDSERVICEDESC": (
+            "Full site URL",
+            lambda v: f"<a href='{v.strip()}'>Some linked service</a>",
+        ),
         "HOSTNAME": ("a hostname to send the notification for", str.strip),
     }
     update_context = {}
@@ -35,26 +41,16 @@ else:
 
 
 base_context = {
-    "NOTIFICATIONTYPE":
-    "PROBLEM",
-    "SERVICESHORTSTATE":
-    "CRIT",
-    "WHAT":
-    "SERVICE",
-    "PREVIOUSSERVICEHARDSHORTSTATE":
-    "OK",
-    "SERVICESTATEID":
-    "2",
-    "HOSTALIAS":
-    "notification-test",
-    "HOSTADDRESS":
-    "192.168.1.1",
-    "SERVICEDESC":
-    "some service",
-    "SERVICEOUTPUT":
-    "Some very long output with LT: <3",
-    "LONGSERVICEOUTPUT":
-    "Some very very\\nvery very very very very very\\nvery very very very very very very\\nvery very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very long output"
+    "NOTIFICATIONTYPE": "PROBLEM",
+    "SERVICESHORTSTATE": "CRIT",
+    "WHAT": "SERVICE",
+    "PREVIOUSSERVICEHARDSHORTSTATE": "OK",
+    "SERVICESTATEID": "2",
+    "HOSTALIAS": "notification-test",
+    "HOSTADDRESS": "192.168.1.1",
+    "SERVICEDESC": "some service",
+    "SERVICEOUTPUT": "Some very long output with LT: <3",
+    "LONGSERVICEOUTPUT": "Some very very\\nvery very very very very very\\nvery very very very very very very\\nvery very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very long output",
 }
 
 base_context.update(update_context)

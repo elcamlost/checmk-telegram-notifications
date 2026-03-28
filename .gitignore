@@ -1,4 +1,6 @@
 *.mkp
 *.pyc
 test.cfg
-checkmk_notify_telegram.egg-info
+*.egg-info
+.venv/
+__pycache__/

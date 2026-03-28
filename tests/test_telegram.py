@@ -1,10 +1,8 @@
 import importlib.util
 import json
-import os
-import sys
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -21,7 +19,6 @@ TelegramNotifier = _module.TelegramNotifier
 TELEGRAM_MESSAGE_LEN_LIMIT = _module.TELEGRAM_MESSAGE_LEN_LIMIT
 
 from tests.conftest import mock_utils  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -62,9 +59,14 @@ def make_notifier(chat_id="123456789", bot_token="1234:token", proxy_args=None):
 # TelegramMessage — truncation logic
 # ---------------------------------------------------------------------------
 
+
 class TestTelegramMessage:
     def _make(self, long_output="", output=""):
-        ctx = {"WHAT": "SERVICE", "LONGSERVICEOUTPUT": long_output, "SERVICEOUTPUT": output}
+        ctx = {
+            "WHAT": "SERVICE",
+            "LONGSERVICEOUTPUT": long_output,
+            "SERVICEOUTPUT": output,
+        }
         template = "$LONGSERVICEOUTPUT$$SERVICEOUTPUT$"
         return TelegramMessage(template=template, context=ctx)
 
@@ -106,6 +108,7 @@ class TestTelegramMessage:
 # TelegramConfig — proxy_args
 # ---------------------------------------------------------------------------
 
+
 class TestProxyArgs:
     def test_no_proxy_returns_empty(self):
         cfg = make_config()
@@ -119,19 +122,23 @@ class TestProxyArgs:
         assert "--proxy-user" not in args
 
     def test_proxy_custom_port(self):
-        cfg = make_config({
-            "PARAMETER_TELEGRAM_SOCKS5_PROXY_SERVER": "proxy.example.com",
-            "PARAMETER_TELEGRAM_SOCKS5_PROXY_PORT": "1234",
-        })
+        cfg = make_config(
+            {
+                "PARAMETER_TELEGRAM_SOCKS5_PROXY_SERVER": "proxy.example.com",
+                "PARAMETER_TELEGRAM_SOCKS5_PROXY_PORT": "1234",
+            }
+        )
         assert "socks5h://proxy.example.com:1234" in cfg.proxy_args
 
     def test_proxy_with_auth(self):
         mock_utils.get_password_from_env_or_context.return_value = "s3cr3t"
-        cfg = make_config({
-            "PARAMETER_TELEGRAM_SOCKS5_PROXY_SERVER": "proxy.example.com",
-            "PARAMETER_TELEGRAM_SOCKS5_PROXY_USER": "proxyuser",
-            "PARAMETER_TELEGRAM_SOCKS5_PROXY_PASSWORD_1": "cmk_postprocessed",
-        })
+        cfg = make_config(
+            {
+                "PARAMETER_TELEGRAM_SOCKS5_PROXY_SERVER": "proxy.example.com",
+                "PARAMETER_TELEGRAM_SOCKS5_PROXY_USER": "proxyuser",
+                "PARAMETER_TELEGRAM_SOCKS5_PROXY_PASSWORD_1": "cmk_postprocessed",
+            }
+        )
         args = cfg.proxy_args
         assert "--proxy-user" in args
         assert "proxyuser:s3cr3t" in args
@@ -139,11 +146,13 @@ class TestProxyArgs:
 
     def test_proxy_with_special_chars_in_password(self):
         mock_utils.get_password_from_env_or_context.return_value = "p%ss!w@rd"
-        cfg = make_config({
-            "PARAMETER_TELEGRAM_SOCKS5_PROXY_SERVER": "proxy.example.com",
-            "PARAMETER_TELEGRAM_SOCKS5_PROXY_USER": "user",
-            "PARAMETER_TELEGRAM_SOCKS5_PROXY_PASSWORD_1": "cmk_postprocessed",
-        })
+        cfg = make_config(
+            {
+                "PARAMETER_TELEGRAM_SOCKS5_PROXY_SERVER": "proxy.example.com",
+                "PARAMETER_TELEGRAM_SOCKS5_PROXY_USER": "user",
+                "PARAMETER_TELEGRAM_SOCKS5_PROXY_PASSWORD_1": "cmk_postprocessed",
+            }
+        )
         args = cfg.proxy_args
         # password must be passed as-is, not URL-encoded
         assert "user:p%ss!w@rd" in args
@@ -151,16 +160,19 @@ class TestProxyArgs:
 
     def test_user_without_password_omits_proxy_user(self):
         mock_utils.get_password_from_env_or_context.return_value = ""
-        cfg = make_config({
-            "PARAMETER_TELEGRAM_SOCKS5_PROXY_SERVER": "proxy.example.com",
-            "PARAMETER_TELEGRAM_SOCKS5_PROXY_USER": "user",
-        })
+        cfg = make_config(
+            {
+                "PARAMETER_TELEGRAM_SOCKS5_PROXY_SERVER": "proxy.example.com",
+                "PARAMETER_TELEGRAM_SOCKS5_PROXY_USER": "user",
+            }
+        )
         assert "--proxy-user" not in cfg.proxy_args
 
 
 # ---------------------------------------------------------------------------
 # TelegramNotifier — _api_command (curl invocation)
 # ---------------------------------------------------------------------------
+
 
 class TestApiCommand:
     def _run_result(self, body="", status=200, returncode=0):
@@ -184,8 +196,7 @@ class TestApiCommand:
         assert payload["parse_mode"] == "html"
 
     def test_send_message_includes_proxy_args(self):
-        notifier = make_notifier(proxy_args=["--proxy", "socks5h://p:1080",
-                                             "--proxy-user", "u:pw"])
+        notifier = make_notifier(proxy_args=["--proxy", "socks5h://p:1080", "--proxy-user", "u:pw"])
         with patch("subprocess.run", return_value=self._run_result()) as mock_run:
             notifier._send_message("hi")
         cmd = mock_run.call_args[0][0]
@@ -225,6 +236,7 @@ class TestApiCommand:
 # TelegramConfig — event text generation
 # ---------------------------------------------------------------------------
 
+
 class TestExtendContext:
     def test_problem_event_txt(self):
         cfg = make_config()
@@ -237,8 +249,13 @@ class TestExtendContext:
         assert "Flapping" in cfg.notification_content
 
     def test_downtime_event_txt(self):
-        cfg = make_config({"NOTIFICATIONTYPE": "DOWNTIMESTART", "SERVICESHORTSTATE": "OK",
-                           "SERVICESTATEID": "0"})
+        cfg = make_config(
+            {
+                "NOTIFICATIONTYPE": "DOWNTIMESTART",
+                "SERVICESHORTSTATE": "OK",
+                "SERVICESTATEID": "0",
+            }
+        )
         assert "Downtime" in cfg.notification_content
 
     def test_acknowledgement_event_txt(self):
@@ -249,6 +266,7 @@ class TestExtendContext:
 # ---------------------------------------------------------------------------
 # TelegramConfig — HTML escaping
 # ---------------------------------------------------------------------------
+
 
 class TestEscapeHtmlOutput:
     def test_lt_gt_escaped_in_output(self):

@@ -1,6 +1,7 @@
 """
 Mock the cmk module so tests can run without a Checkmk installation.
 """
+
 import sys
 from unittest.mock import MagicMock
 

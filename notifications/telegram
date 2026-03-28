@@ -2,12 +2,12 @@
 # Telegram
 "Send Checkmk notifications to Telegram groups by using a bot"
 
-import base64
-import os
 import json
+import os
+import subprocess
+import tempfile
 from sys import stderr, exit as s_exit
 from typing import Callable, Dict, List, Optional, Tuple, Any, Union
-import requests
 from cmk.notification_plugins import utils
 
 TELEGRAM_MESSAGE_LEN_LIMIT = 4096
@@ -96,6 +96,10 @@ class TelegramConfig():
     "Configuration container for the Telegram notifier"
     graph_config_field_name = "PARAMETER_TELEGRAM_GRAPH_CONFIG"
     bot_token_field_name = "PARAMETER_TELEGRAM_BOT_TOKEN"
+    proxy_server_field_name = "PARAMETER_TELEGRAM_SOCKS5_PROXY_SERVER"
+    proxy_port_field_name = "PARAMETER_TELEGRAM_SOCKS5_PROXY_PORT"
+    proxy_user_field_name = "PARAMETER_TELEGRAM_SOCKS5_PROXY_USER"
+    proxy_password_field_name = "PARAMETER_TELEGRAM_SOCKS5_PROXY_PASSWORD"
     chat_id_field_names = [
         "PARAMETER_TELEGRAM_CHAT_ID",  # for notification parameters
         "CONTACT_TELEGRAM_CHAT_ID"  # for custom attributes
@@ -174,6 +178,8 @@ class TelegramConfig():
         # in the templates, we may not use it, though.
         output = "%sOUTPUT" % self.__context["WHAT"]
         long_output = "LONG%sOUTPUT" % self.__context["WHAT"]
+        self.__context.setdefault(output, "")
+        self.__context.setdefault(long_output, "")
         for search, replace in [("<", "&lt;"), (">", "&gt;")]:
             self.__context[output] = self.__context[output].replace(
                 search, replace)
@@ -184,6 +190,9 @@ class TelegramConfig():
     def _notification_status(self):
         return int(self.__context["%sSTATEID" % self.__context["WHAT"]])
 
+    # Maps new-API graph config key suffixes to Checkmk state IDs
+    _graph_state_map = {"OK": 0, "WARN": 1, "CRIT": 2, "UNKNOWN": 3}
+
     @property
     def _should_send_graphs(self):
         send_list = []
@@ -192,8 +201,9 @@ class TelegramConfig():
                 lambda e: e.startswith(self.graph_config_field_name),
                 self.__context):
             if self.__context[setting] == "True":
-                # variables are named <GRAPH_CONFIG_FIELD>_X where X is the checkmk status ID
-                send_list.append(int(setting[-1]))
+                suffix = setting[len(self.graph_config_field_name) + 1:]
+                if suffix in self._graph_state_map:
+                    send_list.append(self._graph_state_map[suffix])
 
         return self._notification_status in send_list
 
@@ -209,10 +219,9 @@ class TelegramConfig():
     def bot_token(self) -> str:
         "Fetch the bot token from notification context"
         if not self.__bot_token:
-            if self.bot_token_field_name in self.__context:
-                self.__bot_token = self.__context[self.bot_token_field_name]
-                self.__bot_token = utils.retrieve_from_passwordstore(
-                    self.__bot_token)
+            if any(k.startswith(self.bot_token_field_name) for k in self.__context):
+                self.__bot_token = utils.get_password_from_env_or_context(
+                    self.bot_token_field_name, self.__context)
             else:
                 raise AttributeError("Unable to find context variable '%s'" %
                                      self.bot_token_field_name)
@@ -232,6 +241,26 @@ class TelegramConfig():
                     "Unable to find chat ID in any field: %s" %
                     ",".join(self.chat_id_field_names))
         return self.__chat_id
+
+    @property
+    def proxy_args(self) -> List[str]:
+        "Build curl proxy arguments if configured, otherwise empty list"
+        if self.proxy_server_field_name not in self.__context:
+            return []
+
+        server = self.__context[self.proxy_server_field_name]
+        port = self.__context.get(self.proxy_port_field_name, "1080")
+        user = self.__context.get(self.proxy_user_field_name, "")
+        if any(k.startswith(self.proxy_password_field_name) for k in self.__context):
+            password = utils.get_password_from_env_or_context(
+                self.proxy_password_field_name, self.__context)
+        else:
+            password = ""
+
+        args = ["--proxy", "socks5h://%s:%s" % (server, port)]
+        if user and password:
+            args += ["--proxy-user", "%s:%s" % (user, password)]
+        return args
 
     @property
     def notification_content(self) -> str:
@@ -281,20 +310,50 @@ class TelegramNotifier():
                      files: Optional[Union[Dict[str, Tuple[str, str]],
                                            List[Tuple[str, str]]]] = None,
                      **kwargs) -> None:
-        # NOTE: There is utils.post_request. However, this function assumes
-        # that context is not modified before submission. Thus, we may not use it.
-        json_data = dict({"chat_id": self.__config.chat_id}, **kwargs)
+        url = self._base_url(endpoint)
+        cmd = ["curl", "-s", "-w", "\n%{http_code}"] + self.__config.proxy_args
 
         if not files:
-            response = requests.post(url=self._base_url(endpoint),
-                                     json=json_data,
-                                     files=files)
-        else:  # when sending files we need to also send parameters using multipart/form-data
-            response = requests.post(url=self._base_url(endpoint),
-                                     data=json_data,
-                                     files=files)
+            payload = dict({"chat_id": self.__config.chat_id}, **kwargs)
+            cmd += ["-H", "Content-Type: application/json",
+                    "-d", json.dumps(payload), url]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+        else:
+            temp_paths: List[str] = []
+            try:
+                form = ["-F", "chat_id=%s" % self.__config.chat_id]
+                for key, value in kwargs.items():
+                    form += ["-F", "%s=%s" % (key, value)]
+                items = files.items() if isinstance(files, dict) else files
+                for name, data in items:
+                    filename, content = data if isinstance(data, tuple) else (name, data)
+                    tmp = tempfile.NamedTemporaryFile(delete=False)
+                    tmp.write(content if isinstance(content, bytes) else content.encode())
+                    tmp.close()
+                    temp_paths.append(tmp.name)
+                    form += ["-F", "%s=@%s;filename=%s" % (name, tmp.name, filename)]
+                result = subprocess.run(cmd + form + [url], capture_output=True, text=True)
+            finally:
+                for path in temp_paths:
+                    os.unlink(path)
 
-        utils.process_by_status_code(response)
+        lines = result.stdout.strip().split("\n")
+        try:
+            status_code = int(lines[-1])
+            body = "\n".join(lines[:-1])
+        except (ValueError, IndexError):
+            status_code = 0
+            body = result.stdout
+
+        if result.returncode != 0:
+            stderr.write("curl failed: %s\n" % result.stderr)
+            s_exit(2)
+        if status_code >= 500:
+            stderr.write("Telegram API server error %d: %s\n" % (status_code, body))
+            s_exit(1)
+        elif status_code >= 400:
+            stderr.write("Telegram API error %d: %s\n" % (status_code, body))
+            s_exit(2)
 
     def _send_message(self, text: str) -> None:
         self._api_command(

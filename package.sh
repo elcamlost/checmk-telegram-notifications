@@ -4,13 +4,16 @@ AUTHOR="thierry.tra@hotmail.com"
 TITLE="Telegram notification plugin"
 PKG_NAME="telegram_notify"
 DESCRIPTION="Send monitoring notifications to a configurable Telegram bot. Have a look at the readme in the git repository for further instructions."
-PLUGIN_VERSION="1.4.3"
-CHECKMK_MIN_VERSION="2.0.0"
+PLUGIN_VERSION="2.0.0"
+CHECKMK_MIN_VERSION="2.4.0"
 CHECKMK_PKG_VERSION=$CHECKMK_MIN_VERSION
 DOWNLOAD_URL="https://bitbucket.org/Nerothank/checkmk_notify_telegram"
 
 SOURCE_PATH=$(pwd)
 OUTPUT_PATH=$(pwd)
+
+# suppress macOS extended attributes in tar archives
+export COPYFILE_DISABLE=1
 
 # remove any python compiled binaries
 find . -name "*.pyc" -delete
@@ -19,46 +22,42 @@ find . -name "*.pyc" -delete
 current_dir=$(pwd)
 cd "$SOURCE_PATH"
 
-declare -A files
+filedict=""
+numfiles=0
 
 # collect all files in all directories and tar them separately
 while read dir; do
     cd "$dir"
 
-    ## update file dictionary
-    files[$dir]="$(find -L -type f)"
+    dir_files="$(find -L -type f)"
+    pretty_key=$(echo "$dir" | sed -E 's/\.\///g')
 
     ## tar files
     tar --dereference -cf "$OUTPUT_PATH/$dir.tar" *
     cd - &>/dev/null
-done < <(find . -maxdepth 1 -type d -name "[!.]*")
 
-# construct the info dictionary/JSON
-filedict=""
-numfiles=0
-## output file list for every dir
-for key in "${!files[@]}"; do
-    pretty_key=$(echo $key | sed -E 's/\.\///g')
-
-    ## start list -> 'key: [
+    ## start list -> 'key': [
     filedict="$filedict'$pretty_key': ["
 
     ## add entries -> 'entry',
-    for file in ${files[$key]}; do
-        pretty_file=$(echo $file | sed -E 's/^\.\///g')
-        filedict="$filedict'$pretty_file',"
-        numfiles=$(( $numfiles + 1 ))
+    first=1
+    for file in $dir_files; do
+        pretty_file=$(echo "$file" | sed -E 's/^\.\///g')
+        if [ $first -eq 1 ]; then
+            filedict="$filedict'$pretty_file'"
+            first=0
+        else
+            filedict="$filedict,'$pretty_file'"
+        fi
+        numfiles=$(( numfiles + 1 ))
     done
-
-    ## remove trailing comma
-    filedict="${filedict::-1}"
 
     ## close list -> ],
     filedict="$filedict],"
-done
+done < <(find . -maxdepth 1 -type d -name "[!.]*")
 
 ## remove trailing comma
-filedict="${filedict::-1}"
+filedict="${filedict%,}"
 
 # finalize info dict/JSON
 info="{'author': '$AUTHOR',
@@ -82,4 +81,4 @@ tar -c *.tar info info.json | gzip --best - > "$OUTPUT_PATH/$PKG_NAME.mkp"
 # cleanup temp files
 rm -f *.tar info info.json
 
-cd $current_dir
+cd "$current_dir"

@@ -1,0 +1,6 @@
+*.mkp
+*.pyc
+test.cfg
+*.egg-info
+.venv/
+__pycache__/

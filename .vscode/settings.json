@@ -1,0 +1,9 @@
+{
+    "python.formatting.provider": "yapf",
+    "terminal.integrated.env.windows": {
+        "PYTHONPATH": "${workspaceFolder}/lib/python3:${CMK_GIT_PATH}:{$PYTONPATH}"
+    },
+    "python.envFile": "${workspaceFolder}/.env",
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true
+}

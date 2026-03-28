@@ -1,0 +1,436 @@
+#!/usr/bin/env python3
+# Telegram
+"Send Checkmk notifications to Telegram groups by using a bot"
+
+import json
+import os
+import subprocess
+import tempfile
+from sys import stderr, exit as s_exit
+from typing import Callable, Dict, List, Optional, Tuple, Any, Union
+from cmk.notification_plugins import utils
+
+TELEGRAM_MESSAGE_LEN_LIMIT = 4096
+
+def is_service_notification(context: dict) -> bool:
+    "Decide whether a notification context is a service notification"
+    return context["WHAT"] == "SERVICE"
+
+
+class GraphFetcher():
+    "Render graphs from Checkmk"
+
+    def __init__(self, context: dict) -> None:
+        self.hostname = context["HOSTNAME"]
+
+        if is_service_notification(context):
+            self.svc_desc = context["SERVICEDESC"]
+        else:
+            self.svc_desc = "_HOST_"
+
+    def render_performance_graphs(self) -> List[Tuple[str, str]]:
+        attachments: list[Attachment] = []
+        file_names = []
+        for graph in utils.render_cmk_graphs(context):
+            attachments.append(Attachment("img", graph.filename, graph.data, "inline"))
+
+            file_names.append(graph.filename)
+
+        return attachments, file_names
+
+
+class TelegramMessage:
+    "Represents the message sent to Telegram"
+
+    def __init__(self, template: str, context: Dict[str, Any]) -> None:
+        self._template = template
+        self._context = context
+        self._full_message = utils.substitute_context(template, context)
+        self._truncated = None
+
+    @property
+    def content(self) -> str:
+        """
+        There is a limit to the text length that may be sent using Telegram.
+        Limit the message length in this function (if necessary)
+        """
+        if self._truncated:
+            return self._truncated
+
+        total_length = len(self._full_message)
+        if total_length <= TELEGRAM_MESSAGE_LEN_LIMIT:
+            # the raw message is within bounds, use it
+            self._truncated = self._full_message
+
+        else:  # the message would be too long
+            # consider long output and regular output (in this order) to truncate the message
+            for key in ["LONG%sOUTPUT", "%sOUTPUT"]:
+                keyname = key % self._context["WHAT"]
+
+                # the key is present and has any length
+                if keyname in self._context and self._context[keyname]:
+                    # determine its length
+                    key_value_length = len(self._context[keyname])
+
+                    # determine the maximum length the current value may have, before exceeding the lenght limit
+                    max_value_length = TELEGRAM_MESSAGE_LEN_LIMIT - (
+                        total_length - key_value_length)
+                    if max_value_length <= 0:
+                        # The value needs to be dropped
+                        self._context[keyname] = ""
+                        total_length -= key_value_length
+                    else:  # we may keep some characters
+                        self._context[keyname] = self._context[
+                            keyname][:max_value_length]
+
+                        # as we got some spare chars left, this means we may break here as the rest of the message needs not to be truncated
+                        break
+
+            self._truncated = utils.substitute_context(self._template,
+                                                    self._context)
+
+        return self._truncated
+
+
+class TelegramConfig():
+    "Configuration container for the Telegram notifier"
+    graph_config_field_name = "PARAMETER_TELEGRAM_GRAPH_CONFIG"
+    bot_token_field_name = "PARAMETER_TELEGRAM_BOT_TOKEN"
+    proxy_server_field_name = "PARAMETER_TELEGRAM_SOCKS5_PROXY_SERVER"
+    proxy_port_field_name = "PARAMETER_TELEGRAM_SOCKS5_PROXY_PORT"
+    proxy_user_field_name = "PARAMETER_TELEGRAM_SOCKS5_PROXY_USER"
+    proxy_password_field_name = "PARAMETER_TELEGRAM_SOCKS5_PROXY_PASSWORD"
+    chat_id_field_names = [
+        "PARAMETER_TELEGRAM_CHAT_ID",  # for notification parameters
+        "CONTACT_TELEGRAM_CHAT_ID"  # for custom attributes
+    ]
+
+    host_template_field_name = "PARAMETER_TELEGRAM_HOST_TEMPLATE"
+    default_host_template = "<b>$NOTIFICATIONTYPE$: $LINKEDHOSTNAME$ $EVENT_TXT$</b>\n" + \
+                      "<code>\n" + \
+                      "Host:     $HOSTNAME$\n"+ \
+                      "Alias:    $HOSTALIAS$\n" + \
+                      "Address:  $HOSTADDRESS$\n" + \
+                      "Event:    $EVENT_TXT$\n" + \
+                      "Output:   $HOSTOUTPUT$\n" + \
+                      "\n" + \
+                      "Detail:\n" + \
+                      "$LONGHOSTOUTPUT$\n" + \
+                      "</code>"
+
+    service_template_field_name = "PARAMETER_TELEGRAM_SERVICE_TEMPLATE"
+    default_service_template = "<b>$NOTIFICATIONTYPE$: $LINKEDSERVICEDESC$ $EVENT_TXT$</b>\n" + \
+                      "<code>\n" + \
+                      "Host:     $HOSTNAME$\n" + \
+                      "Alias:    $HOSTALIAS$\n" + \
+                      "Address:  $HOSTADDRESS$\n" + \
+                      "Service:  $SERVICEDESC$\n" + \
+                      "Event:    $EVENT_TXT$\n" + \
+                      "Output:   $SERVICEOUTPUT$\n" + \
+                      "\n" + \
+                      "Detail:\n" + \
+                      "$LONGSERVICEOUTPUT$\n" + \
+                      "</code>"
+
+    def __init__(self):
+        self.__context = utils.collect_context()
+        self._extend_context()
+        self._escape_html_output()
+        self.__bot_token = None
+        self.__chat_id = None
+
+    # Protected helpers
+    def _extend_context(self):
+        notification_type = self.__context["NOTIFICATIONTYPE"]
+        if notification_type in ["PROBLEM", "RECOVERY"]:
+            event_txt = "$PREVIOUS@HARDSHORTSTATE$ -> $@SHORTSTATE$"
+
+        elif notification_type.startswith("FLAP"):
+            if "START" in notification_type:
+                event_txt = "Started Flapping"
+            else:
+                event_txt = "Stopped Flapping ($@SHORTSTATE$)"
+        elif notification_type.startswith("DOWNTIME"):
+            event_txt = "Downtime " + notification_type[8:].title() + " ($@SHORTSTATE$)"
+        elif notification_type == "ACKNOWLEDGEMENT":
+            event_txt = "Acknowledged ($@SHORTSTATE$)"
+        elif notification_type == "CUSTOM":
+            event_txt = "Custom Notification ($@SHORTSTATE$)"
+        else:
+            event_txt = notification_type  # Should never happen
+
+        self.__context["EVENT_TXT"] = utils.substitute_context(
+            event_txt.replace("@", self.__context["WHAT"]), self.__context)
+
+        self.__context["LINKEDHOSTNAME"] = utils.format_link(
+            '<a href="%s">%s</a>', utils.host_url_from_context(self.__context),
+            self.__context["HOSTNAME"])
+
+        self.__context["LINKEDSERVICEDESC"] = utils.format_link(
+            '<a href="%s">%s</a>',
+            utils.service_url_from_context(self.__context),
+            self.__context.get("SERVICEDESC", ''))
+
+    def _escape_html_output(self):
+        "Escape any HTML characters in output and long output"
+
+        # NOTE: There is utils.html_escape_context. Since we need HTML tags
+        # in the templates, we may not use it, though.
+        output = "%sOUTPUT" % self.__context["WHAT"]
+        long_output = "LONG%sOUTPUT" % self.__context["WHAT"]
+        self.__context.setdefault(output, "")
+        self.__context.setdefault(long_output, "")
+        for search, replace in [("<", "&lt;"), (">", "&gt;")]:
+            self.__context[output] = self.__context[output].replace(
+                search, replace)
+            self.__context[long_output] = self.__context[long_output].replace(
+                search, replace)
+
+    @property
+    def _notification_status(self):
+        return int(self.__context["%sSTATEID" % self.__context["WHAT"]])
+
+    # Maps new-API graph config key suffixes to Checkmk state IDs
+    _graph_state_map = {"OK": 0, "WARN": 1, "CRIT": 2, "UNKNOWN": 3}
+
+    @property
+    def _should_send_graphs(self):
+        send_list = []
+
+        for setting in filter(
+                lambda e: e.startswith(self.graph_config_field_name),
+                self.__context):
+            if self.__context[setting] == "True":
+                suffix = setting[len(self.graph_config_field_name) + 1:]
+                if suffix in self._graph_state_map:
+                    send_list.append(self._graph_state_map[suffix])
+
+        return self._notification_status in send_list
+
+    # Publics
+    @property
+    def performance_graphs(self) -> Union[List, List[Tuple[str, str]]]:
+        "Return performance graphs if enabled, otherwise empty list"
+        if self._should_send_graphs:
+            return GraphFetcher(self.__context).render_performance_graphs()
+        return []
+
+    @property
+    def bot_token(self) -> str:
+        "Fetch the bot token from notification context"
+        if not self.__bot_token:
+            if any(k.startswith(self.bot_token_field_name) for k in self.__context):
+                self.__bot_token = utils.get_password_from_env_or_context(
+                    self.bot_token_field_name, self.__context)
+            else:
+                raise AttributeError("Unable to find context variable '%s'" %
+                                     self.bot_token_field_name)
+        return self.__bot_token
+
+    @property
+    def chat_id(self) -> str:
+        "Fetch the chat ID from notification context"
+        if not self.__chat_id:
+            for fieldname in self.chat_id_field_names:
+                if fieldname in self.__context and self.__context[
+                        fieldname] != 0:
+                    self.__chat_id = self.__context[fieldname]
+                    break
+            else:
+                raise AttributeError(
+                    "Unable to find chat ID in any field: %s" %
+                    ",".join(self.chat_id_field_names))
+        return self.__chat_id
+
+    @property
+    def proxy_args(self) -> List[str]:
+        "Build curl proxy arguments if configured, otherwise empty list"
+        if self.proxy_server_field_name not in self.__context:
+            return []
+
+        server = self.__context[self.proxy_server_field_name]
+        port = self.__context.get(self.proxy_port_field_name, "1080")
+        user = self.__context.get(self.proxy_user_field_name, "")
+        if any(k.startswith(self.proxy_password_field_name) for k in self.__context):
+            password = utils.get_password_from_env_or_context(
+                self.proxy_password_field_name, self.__context)
+        else:
+            password = ""
+
+        args = ["--proxy", "socks5h://%s:%s" % (server, port)]
+        if user and password:
+            args += ["--proxy-user", "%s:%s" % (user, password)]
+        return args
+
+    @property
+    def notification_content(self) -> str:
+        "Format the text of the notification based on the context"
+        if is_service_notification(self.__context):
+            template = self.__context.setdefault(
+                self.service_template_field_name,
+                self.default_service_template)
+        else:
+            template = self.__context.setdefault(self.host_template_field_name,
+                                                 self.default_host_template)
+
+        return TelegramMessage(template=template,
+                               context=self.__context).content
+
+
+def exit_on_nonzero_only(func: Callable[[Any], None]) -> Callable[[Any], None]:
+    "Keep the program running if exit code is 0, otherwise exit"
+
+    def wrap(*args):
+        exit_code = 0
+        try:
+            func(*args)
+        except SystemExit as ex:
+            exit_code = ex.code
+        finally:
+            if exit_code != 0:
+                s_exit(exit_code)
+
+    return wrap
+
+
+class TelegramNotifier():
+    "Send checkmk notifications to Telegram"
+
+    def __init__(self, config: TelegramConfig) -> None:
+        self.__config = config
+
+    def _base_url(self,
+                  endpoint: str,
+                  hide_token: Optional[bool] = False) -> str:
+        return "https://api.telegram.org/bot%s/%s" % (
+            self.__config.bot_token if not hide_token else "****", endpoint)
+
+    def _api_command(self,
+                     endpoint: str,
+                     files: Optional[Union[Dict[str, Tuple[str, str]],
+                                           List[Tuple[str, str]]]] = None,
+                     **kwargs) -> None:
+        url = self._base_url(endpoint)
+        cmd = ["curl", "-s", "-w", "\n%{http_code}"] + self.__config.proxy_args
+
+        if not files:
+            payload = dict({"chat_id": self.__config.chat_id}, **kwargs)
+            cmd += ["-H", "Content-Type: application/json",
+                    "-d", json.dumps(payload), url]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+        else:
+            temp_paths: List[str] = []
+            try:
+                form = ["-F", "chat_id=%s" % self.__config.chat_id]
+                for key, value in kwargs.items():
+                    form += ["-F", "%s=%s" % (key, value)]
+                items = files.items() if isinstance(files, dict) else files
+                for name, data in items:
+                    filename, content = data if isinstance(data, tuple) else (name, data)
+                    tmp = tempfile.NamedTemporaryFile(delete=False)
+                    tmp.write(content if isinstance(content, bytes) else content.encode())
+                    tmp.close()
+                    temp_paths.append(tmp.name)
+                    form += ["-F", "%s=@%s;filename=%s" % (name, tmp.name, filename)]
+                result = subprocess.run(cmd + form + [url], capture_output=True, text=True)
+            finally:
+                for path in temp_paths:
+                    os.unlink(path)
+
+        lines = result.stdout.strip().split("\n")
+        try:
+            status_code = int(lines[-1])
+            body = "\n".join(lines[:-1])
+        except (ValueError, IndexError):
+            status_code = 0
+            body = result.stdout
+
+        if result.returncode != 0:
+            stderr.write("curl failed: %s\n" % result.stderr)
+            s_exit(2)
+        if status_code >= 500:
+            stderr.write("Telegram API server error %d: %s\n" % (status_code, body))
+            s_exit(1)
+        elif status_code >= 400:
+            stderr.write("Telegram API error %d: %s\n" % (status_code, body))
+            s_exit(2)
+
+    def _send_message(self, text: str) -> None:
+        self._api_command(
+            "sendMessage", **{
+                "text": text,
+                "disable_web_page_preview": True,
+                "parse_mode": "html"
+            })
+
+    @exit_on_nonzero_only
+    def _send_photo(self, photo_data: Tuple[str, str]) -> None:
+        # We could use the 'caption' property here to send an image description.
+        # However, the caption is limited to 1000 characters. Sending just the
+        # image and a separate text message is easier.
+        self._api_command("sendPhoto",
+                          files={"photo": photo_data},
+                          **{
+                              "parse_mode": "html",
+                              "disable_notification": True,
+                          })
+
+    @exit_on_nonzero_only
+    def _send_mediagroup(self, photo_data: List[Tuple[str, str]],
+                         media_description: List[Dict[str, str]]) -> None:
+        """
+        Send multiple media to telegram as one album.
+        photo_data => a key-value mapping in the format 'filename': 'image data'
+        media_description => a list of dicts telling telegram, what images are in photo_data
+
+        https://core.telegram.org/bots/api#sendmediagroup
+        https://core.telegram.org/bots/api#inputmediaphoto
+        https://github.com/php-telegram-bot/core/issues/811
+        """
+
+        # We could use the 'caption' property here to send an image description
+        # for the last media element. However, the caption is limited to 1000
+        # characters. Sending just the images and a separate text message is easier.
+
+        self._api_command("sendMediaGroup",
+                          files=photo_data,
+                          **{
+                              "disable_notification": True,
+                              "media": json.dumps(media_description)
+                          })
+
+    def notify(self) -> None:
+        "Start the notification process"
+        text = self.__config.notification_content
+
+        try:
+            attachments = self.__config.performance_graphs
+
+            if len(attachments
+                   ) == 1:  # exactly one picture, send as photo with caption
+                _, att_data = attachments[0]
+                self._send_photo(att_data)
+
+            elif len(attachments) > 1:  # more than one picture, send as album
+                telegram_media = []  # media description list for telegram API
+                media_data = {}  # the actual image data
+                for att_name, att_data in attachments:
+                    telegram_media.append({
+                        "type": "photo",
+                        "media": "attach://%s" % att_name
+                    })
+
+                    media_data[att_name] = att_data
+
+                self._send_mediagroup(media_data, telegram_media)
+
+            # always send the notification text in a separate message to avoid length limitations
+            self._send_message(text)
+
+        except AttributeError as atterr:
+            stderr.write(repr(atterr))
+            s_exit(2)
+
+
+if __name__ == "__main__":
+    TelegramNotifier(TelegramConfig()).notify()

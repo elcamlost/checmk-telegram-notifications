@@ -6,7 +6,15 @@ on:
   pull_request:
 
 jobs:
-  test:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Lint
+        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+
+  unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -14,12 +22,38 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.14"
-
-      - name: Lint
-        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+          cache: "pip"
 
       - name: Install dependencies
         run: pip install ".[dev]"
 
       - name: Run tests
         run: pytest -v
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          report_type: coverage
+
+      - name: Upload tests results
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit.xml
+          report_type: test_results
+
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image:
+          - "checkmk/check-mk-raw:2.3.0-latest"
+          - "checkmk/check-mk-raw:2.4.0-latest"
+          - "checkmk/check-mk-community:2.5.0-latest"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Integration test
+        run: make test IMAGE=${{ matrix.image }}

@@ -1,8 +1,10 @@
 # Checkmk Telegram Notification Plugin
 
+[![codecov](https://codecov.io/gh/elcamlost/checkmk_notify_telegram/branch/main/graph/badge.svg)](https://codecov.io/gh/elcamlost/checkmk_notify_telegram)
+
 A Checkmk notification plugin that sends monitoring alerts to a Telegram chat via a bot. Supports plain text notifications and performance graphs.
 
-Requires **Checkmk 2.4+**.
+Requires **Checkmk 2.3+**.
 
 ## Setup
 
@@ -25,7 +27,7 @@ curl -s "https://api.telegram.org/bot${BOT_TOKEN}/getUpdates" | grep '"chat"' -A
 Build the MKP package:
 
 ```bash
-bash package.sh
+python3 package.py
 ```
 
 Install on your Checkmk site:

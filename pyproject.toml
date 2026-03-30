@@ -5,11 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "checkmk-notify-telegram"
 version = "2.0.0"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pytest-cov",
     "ruff",
 ]
 
@@ -18,9 +19,11 @@ packages = []
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov --cov-report=term-missing --cov-report=xml --junitxml=junit.xml -o junit_family=legacy"
+
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py312"
 line-length = 120
 
 [tool.ruff.lint]

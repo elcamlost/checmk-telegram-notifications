@@ -1,6 +1,6 @@
 # Checkmk Telegram Notification Plugin
 
-[![codecov](https://codecov.io/gh/elcamlost/checkmk_notify_telegram/branch/main/graph/badge.svg)](https://codecov.io/gh/elcamlost/checkmk_notify_telegram)
+[![codecov](https://codecov.io/gh/elcamlost/checmk-telegram-notifications/branch/main/graph/badge.svg)](https://codecov.io/gh/elcamlost/checmk-telegram-notifications)
 
 A Checkmk notification plugin that sends monitoring alerts to a Telegram chat via a bot. Supports plain text notifications and performance graphs.
 

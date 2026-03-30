@@ -1,15 +1,15 @@
 # Project: Checkmk Telegram Notification Plugin
 
-A Checkmk 2.4+ MKP package that sends monitoring notifications to Telegram.
+A Checkmk 2.3+ MKP package that sends monitoring notifications to Telegram.
 
 ## Structure
 
 - `notifications/telegram` — the notification script (no `.py` extension, executable)
 - `cmk_addons_plugins/telegram_notify/rulesets/notification_parameters.py` — form spec using `cmk.rulesets.v1` (Checkmk 2.4 new API)
-- `package.sh` — builds the `.mkp` archive
+- `package.py` — builds the `.mkp` archive
 - `tests/` — pytest unit tests (no Checkmk required)
 - `test.py` — manual end-to-end test (sends a real notification)
-- `pyproject.toml` — dev dependencies (`pytest`)
+- `pyproject.toml` — dev dependencies (`pytest`, `pytest-cov`, `ruff`)
 
 ## Key technical facts
 
@@ -42,7 +42,7 @@ The test suite mocks `cmk.notification_plugins.utils` via `sys.modules` in `test
 ## Deployment
 
 ```bash
-bash package.sh
+python3 package.py
 mkp install telegram_notify.mkp   # on the Checkmk server
 ```
 
